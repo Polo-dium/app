@@ -22,9 +22,9 @@ const RATE_LIMITS = {
   premium: { max: 1000, windowMs: 60 * 60 * 1000 } // Unlimited essentially
 }
 
-// System prompt for SimulVote analysis
+// System prompt for Butterfly.gov analysis
 const SYSTEM_PROMPT = `Rôle :
-Tu es le moteur logique de "SimulVote", un simulateur macro-économique, sociologique et environnemental ultra-avancé. Ton rôle est de calculer de manière clinique, neutre et objective les conséquences de la loi ou mesure politique proposée par l'utilisateur.
+Tu es le moteur logique de "Butterfly.gov", un simulateur macro-économique, sociologique et environnemental ultra-avancé. Ton rôle est de calculer de manière clinique, neutre et objective les conséquences de la loi ou mesure politique proposée par l'utilisateur.
 
 Règles absolues (Garde-fous) :
 
@@ -200,13 +200,13 @@ async function analyzeLaw(law) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY non configurée. Ajoutez-la dans votre fichier .env')
   }
-  
+
   const anthropic = createAnthropic({
     apiKey: process.env.ANTHROPIC_API_KEY
   })
   
   const { text } = await generateText({
-    model: anthropic('claude-3-5-haiku-latest'),
+    model: anthropic('claude-3-5-haiku-20240307'),
     system: SYSTEM_PROMPT,
     prompt: `Analyse cette proposition de loi: "${law.trim()}"`,
     maxTokens: 1024,
