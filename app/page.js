@@ -232,13 +232,14 @@ export default function Home() {
       })
       
       // Open Twitter share
+      const appUrl = 'https://policy-effect.preview.emergentagent.com'
       const tweetText = encodeURIComponent(
-        `🦋 J'ai passé la loi "${lawText.substring(0, 50)}${lawText.length > 50 ? '...' : ''}" sur SimulVote\n\n` +
+        `🦋 J'ai passé la loi "${lawText.substring(0, 50)}${lawText.length > 50 ? '...' : ''}" sur Butterfly.gov\n\n` +
         `📊 Mon score présidentiel:\n` +
         `💰 Économie: ${result.scores.economy}/100\n` +
         `❤️ Social: ${result.scores.social}/100\n` +
         `🌿 Écologie: ${result.scores.ecology}/100\n\n` +
-        `Tentez de faire mieux ! 👇`
+        `Tentez de faire mieux ! 👇\n${appUrl}`
       )
       window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, '_blank')
     } catch (err) {
