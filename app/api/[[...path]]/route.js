@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 
 // CORS headers
 const corsHeaders = {
@@ -8,39 +8,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
 
-// Initialize OpenAI client with Emergent key (OpenAI-compatible)
-const getOpenAIClient = () => {
-  const apiKey = process.env.EMERGENT_LLM_KEY
+// Initialize Anthropic client
+const getAnthropicClient = () => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
-    throw new Error('EMERGENT_LLM_KEY not configured')
+    throw new Error('ANTHROPIC_API_KEY not configured')
   }
-  return new OpenAI({
+  return new Anthropic({
     apiKey: apiKey,
   })
 }
 
-// System prompt for law analysis
-const SYSTEM_PROMPT = `Tu es un analyste politique expert et satirique. Tu analyses les propositions de loi de manière réaliste mais avec une touche d'humour et d'ironie.
+// System prompt for SimulVote - Neutral and objective analysis
+const SYSTEM_PROMPT = `Rôle :
+Tu es le moteur logique de "SimulVote", un simulateur macro-économique, sociologique et environnemental ultra-avancé. Ton rôle est de calculer de manière clinique, neutre et objective les conséquences de la loi ou mesure politique proposée par l'utilisateur.
 
-Quand on te donne une proposition de loi, tu dois répondre UNIQUEMENT avec un objet JSON valide (sans markdown, sans commentaires) dans ce format exact:
+Règles absolues (Garde-fous) :
+
+Neutralité totale : N'émets JAMAIS de jugement de valeur. N'utilise pas de mots comme "bien", "mal", "juste", "injuste", "dangereux" ou "humaniste". Tu ne fais pas la morale. Tu énonces des mécanismes de cause à effet.
+
+Réalisme cynique : Base tes prévisions sur la théorie des jeux, l'économie comportementale et l'histoire. Si une loi crée une faille, les gens l'exploiteront. Prends en compte les effets de bord (fuite des capitaux, marché noir, inflation, etc.).
+
+Format strict : Tu DOIS répondre UNIQUEMENT par un objet JSON valide, sans aucun texte avant ou après.
+
+Structure du JSON attendu :
+
 {
-  "winners": "Une phrase décrivant qui bénéficie de cette loi",
-  "losers": "Une phrase décrivant qui en paie le prix",
-  "butterfly_effect": "Une conséquence inattendue, ironique ou absurde à 5 ans",
+  "winners": "Description factuelle et concise de la catégorie de population ou secteur qui tirera un bénéfice direct et mesurable de cette mesure (max 15 mots).",
+  "losers": "Description factuelle et concise de ceux qui paieront le coût direct ou perdront des avantages (max 15 mots).",
+  "butterfly_effect": "Prévision d'une conséquence secondaire inattendue, ironique ou systémique à un horizon de 5 ans. Sois percutant (max 20 mots).",
   "scores": {
-    "economy": <nombre entre 0 et 100>,
-    "happiness": <nombre entre 0 et 100>,
-    "ecology": <nombre entre 0 et 100>
+    "economy": [Entier de 0 à 100 estimant la santé financière globale, le PIB et l'emploi],
+    "social": [Entier de 0 à 100 estimant la paix sociale, la réduction des inégalités et la santé publique],
+    "ecology": [Entier de 0 à 100 estimant l'impact sur le climat, la biodiversité et les ressources]
   }
-}
-
-Règles:
-- Sois réaliste dans ton analyse mais garde une touche d'humour
-- L'effet papillon doit être créatif, surprenant et mémorable
-- Les scores doivent être cohérents avec l'analyse
-- Réponds UNIQUEMENT avec le JSON, rien d'autre
-- Les textes doivent être en français
-- Garde les réponses concises (1-2 phrases max par champ)`
+}`
 
 // Handle OPTIONS (CORS preflight)
 export async function OPTIONS() {
@@ -78,13 +80,13 @@ export async function GET(request, { params }) {
   
   if (endpoint === 'health') {
     return NextResponse.json(
-      { status: 'ok', service: 'butterfly.gov' },
+      { status: 'ok', service: 'SimulVote / Butterfly.gov' },
       { headers: corsHeaders }
     )
   }
   
   return NextResponse.json(
-    { message: 'Butterfly.gov API', endpoints: ['/api/analyze', '/api/health'] },
+    { message: 'SimulVote API', endpoints: ['/api/analyze', '/api/health'] },
     { headers: corsHeaders }
   )
 }
@@ -109,16 +111,13 @@ async function handleAnalyze(request) {
   }
   
   try {
-    const client = getOpenAIClient()
+    const client = getAnthropicClient()
     
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4.1',
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
+      system: SYSTEM_PROMPT,
       messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT
-        },
         {
           role: 'user',
           content: `Analyse cette proposition de loi: "${law.trim()}"`
@@ -127,7 +126,7 @@ async function handleAnalyze(request) {
     })
     
     // Extract text content
-    const responseText = completion.choices[0].message.content
+    const responseText = message.content[0].text
     
     // Parse JSON response
     let analysis
@@ -157,14 +156,14 @@ async function handleAnalyze(request) {
     // Ensure scores are within bounds
     analysis.scores = {
       economy: Math.max(0, Math.min(100, analysis.scores.economy || 50)),
-      happiness: Math.max(0, Math.min(100, analysis.scores.happiness || 50)),
+      social: Math.max(0, Math.min(100, analysis.scores.social || 50)),
       ecology: Math.max(0, Math.min(100, analysis.scores.ecology || 50))
     }
     
     return NextResponse.json(analysis, { headers: corsHeaders })
     
   } catch (error) {
-    console.error('OpenAI API Error:', error)
+    console.error('Anthropic API Error:', error)
     return NextResponse.json(
       { error: 'Erreur lors de la communication avec l\'IA: ' + error.message },
       { status: 500, headers: corsHeaders }

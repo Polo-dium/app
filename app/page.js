@@ -45,7 +45,7 @@ function AnimatedCounter({ value, color, label, icon: Icon }) {
   }, [value])
   
   const getColorClass = () => {
-    if (value >= 70) return 'text-green-400'
+    if (value >= 60) return 'text-green-400'
     if (value >= 40) return 'text-yellow-400'
     return 'text-red-400'
   }
@@ -111,9 +111,9 @@ function ResultCard({ result, lawText, cardRef }) {
               icon={TrendingUp}
             />
             <AnimatedCounter 
-              value={result.scores.happiness} 
+              value={result.scores.social} 
               color="text-white" 
-              label="Bonheur"
+              label="Social"
               icon={Heart}
             />
             <AnimatedCounter 
@@ -233,10 +233,10 @@ export default function Home() {
       
       // Open Twitter share
       const tweetText = encodeURIComponent(
-        `🦋 J'ai passé la loi "${lawText.substring(0, 50)}${lawText.length > 50 ? '...' : ''}" sur Butterfly.gov\n\n` +
+        `🦋 J'ai passé la loi "${lawText.substring(0, 50)}${lawText.length > 50 ? '...' : ''}" sur SimulVote\n\n` +
         `📊 Mon score présidentiel:\n` +
         `💰 Économie: ${result.scores.economy}/100\n` +
-        `❤️ Bonheur: ${result.scores.happiness}/100\n` +
+        `❤️ Social: ${result.scores.social}/100\n` +
         `🌿 Écologie: ${result.scores.ecology}/100\n\n` +
         `Tentez de faire mieux ! 👇`
       )
