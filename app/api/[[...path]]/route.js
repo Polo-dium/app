@@ -22,7 +22,7 @@ const RATE_LIMITS = {
   premium: { max: 1000, windowMs: 60 * 60 * 1000 } // Unlimited essentially
 }
 
-// System prompt for SimulVote
+// System prompt for SimulVote analysis
 const SYSTEM_PROMPT = `Rôle :
 Tu es le moteur logique de "SimulVote", un simulateur macro-économique, sociologique et environnemental ultra-avancé. Ton rôle est de calculer de manière clinique, neutre et objective les conséquences de la loi ou mesure politique proposée par l'utilisateur.
 
@@ -46,6 +46,21 @@ Structure du JSON attendu :
     "ecology": [Entier de 0 à 100 estimant l'impact sur le climat, la biodiversité et les ressources]
   }
 }`
+
+// System prompt for "L'Opposant Féroce" - Premium Debate Chat
+const DEBATE_CHAT_PROMPT = `Tu es "L'Opposant Féroce", un débatteur politique, macro-économiste et sociologue brillant, cynique et impitoyable. L'utilisateur vient de proposer une loi. Ton but n'est pas de l'aider, mais de la détruire argumentativement.
+
+Ton ton : Piquant, sarcastique, hyper-rationnel, un brin arrogant mais sans jamais utiliser d'insultes. Tu parles comme un expert de plateau télé qui vient de trouver une faille béante dans le raisonnement de son adversaire.
+
+Ta méthode : Attaque immédiatement sur les angles morts (financement introuvable, fuite des capitaux, injustice sociale cachée, désastre écologique imprévu).
+
+Ton objectif : Pousse l'utilisateur dans ses retranchements. S'il te donne un bon argument ou amende sa loi intelligemment, concède le point à contrecœur et recalcule son score global à la hausse. S'il répond de manière démagogique, effondre son score et sois implacable.
+
+IMPORTANT - Tu dois TOUJOURS terminer ta réponse par un objet JSON sur une nouvelle ligne avec ce format exact:
+{"score_adjustment": X, "new_scores": {"economy": Y, "social": Z, "ecology": W}}
+où X est un nombre entre -15 et +15 représentant l'ajustement du score global basé sur la qualité de l'argument.
+
+Format de réponse : Des réponses courtes (max 3 paragraphes). Termine toujours par une question rhétorique ou un défi direct pour forcer l'utilisateur à répondre, PUIS le JSON d'ajustement de score.`
 
 // Get client IP address
 function getClientIP(request) {
@@ -260,6 +275,10 @@ export async function POST(request, { params }) {
       return handleDebate(request)
     }
     
+    if (endpoint === 'debate-chat') {
+      return handleDebateChat(request)
+    }
+    
     if (endpoint === 'stripe/create-checkout') {
       return handleCreateCheckout(request)
     }
@@ -400,6 +419,88 @@ async function handleDebate(request) {
   } catch (error) {
     console.error('Debate Error:', error)
     return NextResponse.json({ error: 'Erreur lors de l\'analyse: ' + error.message }, { status: 500, headers: corsHeaders })
+  }
+}
+
+// Debate Chat with "L'Opposant Féroce" (Premium only)
+async function handleDebateChat(request) {
+  const user = await getUser(request)
+  
+  // Check premium access
+  const supabase = createServiceClient()
+  if (supabase && (!user || !user.profile?.is_premium)) {
+    return NextResponse.json({ 
+      error: 'premium_required',
+      message: 'Le Mode Débat Chat est réservé aux abonnés Premium.'
+    }, { status: 403, headers: corsHeaders })
+  }
+  
+  const body = await request.json()
+  const { law, messages, currentScores } = body
+  
+  if (!law || !messages || !Array.isArray(messages)) {
+    return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400, headers: corsHeaders })
+  }
+  
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY non configurée' }, { status: 500, headers: corsHeaders })
+  }
+  
+  try {
+    const anthropic = createAnthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY
+    })
+    
+    // Build conversation context
+    const systemWithContext = `${DEBATE_CHAT_PROMPT}
+
+CONTEXTE DE LA LOI DÉBATTUE:
+"${law}"
+
+SCORES ACTUELS:
+- Économie: ${currentScores?.economy || 50}/100
+- Social: ${currentScores?.social || 50}/100
+- Écologie: ${currentScores?.ecology || 50}/100
+- Score Global: ${currentScores?.overall || 50}/100
+
+Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
+    
+    // Format messages for Claude
+    const formattedMessages = messages.map(m => ({
+      role: m.role,
+      content: m.content
+    }))
+    
+    const { text } = await generateText({
+      model: anthropic('claude-3-5-haiku-latest'),
+      system: systemWithContext,
+      messages: formattedMessages,
+      maxTokens: 1024,
+    })
+    
+    // Extract score adjustment from response
+    let responseText = text
+    let scoreAdjustment = null
+    
+    // Try to extract JSON from the end of the response
+    const jsonMatch = text.match(/\{"score_adjustment":\s*(-?\d+),\s*"new_scores":\s*\{[^}]+\}\}/s)
+    if (jsonMatch) {
+      try {
+        scoreAdjustment = JSON.parse(jsonMatch[0])
+        responseText = text.replace(jsonMatch[0], '').trim()
+      } catch (e) {
+        console.error('Failed to parse score adjustment:', e)
+      }
+    }
+    
+    return NextResponse.json({
+      response: responseText,
+      scoreAdjustment: scoreAdjustment
+    }, { headers: corsHeaders })
+    
+  } catch (error) {
+    console.error('Debate Chat Error:', error)
+    return NextResponse.json({ error: 'Erreur lors du débat: ' + error.message }, { status: 500, headers: corsHeaders })
   }
 }
 
