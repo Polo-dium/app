@@ -1,14 +1,127 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import html2canvas from 'html2canvas'
 import confetti from 'canvas-confetti'
+import { createClient } from '@/lib/supabase/client'
+
+// Auth Context
+const AuthContext = createContext(null)
+
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [supabaseConfigured, setSupabaseConfigured] = useState(false)
+  
+  useEffect(() => {
+    const supabase = createClient()
+    
+    // If Supabase is not configured, run in demo mode
+    if (!supabase) {
+      setLoading(false)
+      setSupabaseConfigured(false)
+      return
+    }
+    
+    setSupabaseConfigured(true)
+    
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null)
+      if (session?.user) {
+        fetchProfile(session.user.id, supabase)
+      } else {
+        setLoading(false)
+      }
+    })
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null)
+      if (session?.user) {
+        fetchProfile(session.user.id, supabase)
+      } else {
+        setProfile(null)
+        setLoading(false)
+      }
+    })
+    
+    return () => subscription.unsubscribe()
+  }, [])
+  
+  const fetchProfile = async (userId, supabase) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+    setProfile(data)
+    setLoading(false)
+  }
+  
+  const signInWithGoogle = async () => {
+    const supabase = createClient()
+    if (!supabase) return
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    })
+  }
+  
+  const signInWithEmail = async (email) => {
+    const supabase = createClient()
+    if (!supabase) return { error: { message: 'Supabase non configuré' } }
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin }
+    })
+    return { error }
+  }
+  
+  const signOut = async () => {
+    const supabase = createClient()
+    if (supabase) {
+      await supabase.auth.signOut()
+    }
+    setUser(null)
+    setProfile(null)
+  }
+  
+  const getAccessToken = async () => {
+    const supabase = createClient()
+    if (!supabase) return null
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token
+  }
+  
+  return (
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      loading, 
+      signInWithGoogle, 
+      signInWithEmail, 
+      signOut,
+      getAccessToken,
+      isPremium: profile?.is_premium || false,
+      supabaseConfigured
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+function useAuth() {
+  return useContext(AuthContext)
+}
 
 // Butterfly icon component
 function ButterflyIcon({ className }) {
@@ -23,7 +136,7 @@ function ButterflyIcon({ className }) {
   )
 }
 
-// Trigger confetti for high scores
+// Trigger confetti
 function triggerConfetti(score) {
   if (score >= 70) {
     confetti({
@@ -35,7 +148,257 @@ function triggerConfetti(score) {
   }
 }
 
-// Animated counter component with glow effect
+// Loading states messages
+const LOADING_MESSAGES = [
+  "Analyse macro-économique en cours...",
+  "Calcul des impacts sociaux...",
+  "Évaluation écologique...",
+  "Recherche de l'effet papillon...",
+  "Compilation des résultats..."
+]
+
+// Loading component with dynamic messages
+function AnalysisLoader() {
+  const [messageIndex, setMessageIndex] = useState(0)
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex(i => (i + 1) % LOADING_MESSAGES.length)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
+  
+  return (
+    <motion.div 
+      className="flex flex-col items-center justify-center py-12 space-y-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+      >
+        <ButterflyIcon className="w-16 h-16 text-blue-400" />
+      </motion.div>
+      <motion.p 
+        key={messageIndex}
+        className="text-lg text-muted-foreground"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+      >
+        {LOADING_MESSAGES[messageIndex]}
+      </motion.p>
+      <div className="flex gap-1">
+        {[0, 1, 2].map(i => (
+          <motion.div
+            key={i}
+            className="w-2 h-2 rounded-full bg-blue-400"
+            animate={{ scale: [1, 1.5, 1] }}
+            transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+// Auth Modal
+function AuthModal({ open, onClose }) {
+  const { signInWithGoogle, signInWithEmail } = useAuth()
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+  
+  const handleEmailSignIn = async () => {
+    if (!email) return
+    setLoading(true)
+    const { error } = await signInWithEmail(email)
+    setLoading(false)
+    if (!error) {
+      setSent(true)
+    }
+  }
+  
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-white/10">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Connexion à Butterfly.gov</DialogTitle>
+          <DialogDescription>
+            Connectez-vous pour sauvegarder vos lois et débloquer plus de tests
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          {!sent ? (
+            <>
+              <Button 
+                onClick={signInWithGoogle}
+                className="w-full bg-white text-black hover:bg-gray-100"
+              >
+                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continuer avec Google
+              </Button>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-white/10" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">ou</span>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Input
+                  type="email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-background"
+                />
+                <Button 
+                  onClick={handleEmailSignIn}
+                  disabled={!email || loading}
+                  className="w-full"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
+                  Recevoir un lien magique
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-4 space-y-2">
+              <Mail className="w-12 h-12 mx-auto text-blue-400" />
+              <p className="text-lg font-medium">Email envoyé !</p>
+              <p className="text-sm text-muted-foreground">
+                Vérifiez votre boîte mail et cliquez sur le lien pour vous connecter.
+              </p>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Soft Wall - Rate Limit Exceeded
+function SoftWall({ userTier, resetAt, onSignIn, onUpgrade }) {
+  const timeUntilReset = Math.max(0, Math.ceil((new Date(resetAt) - new Date()) / 60000))
+  
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      <motion.div
+        className="max-w-md w-full bg-card rounded-2xl p-6 border border-white/10 space-y-6"
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+      >
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/20 mb-2">
+            <Clock className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-2xl font-bold">Limite atteinte</h2>
+          <p className="text-muted-foreground">
+            {userTier === 'anonymous' 
+              ? "Vous avez épuisé vos 5 tests gratuits de l'heure."
+              : "Vous avez atteint votre limite de 10 tests de l'heure."}
+          </p>
+        </div>
+        
+        <div className="bg-black/30 rounded-lg p-4 text-center">
+          <p className="text-sm text-muted-foreground">Prochain reset dans</p>
+          <p className="text-3xl font-bold text-blue-400">{timeUntilReset} min</p>
+        </div>
+        
+        <div className="space-y-3">
+          {userTier === 'anonymous' && (
+            <Button onClick={onSignIn} className="w-full bg-blue-600 hover:bg-blue-500">
+              <User className="w-4 h-4 mr-2" />
+              Créer un compte gratuit (+5 tests/h)
+            </Button>
+          )}
+          
+          <Button onClick={onUpgrade} className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black">
+            <Crown className="w-4 h-4 mr-2" />
+            Passer Premium (2,99€/mois) - Illimité
+          </Button>
+          
+          <p className="text-xs text-center text-muted-foreground">
+            Premium = Tests illimités + Mode Débat exclusif
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// Premium Badge
+function PremiumBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-black text-xs font-bold">
+      <Crown className="w-3 h-3" />
+      PREMIUM
+    </span>
+  )
+}
+
+// User Menu
+function UserMenu() {
+  const { user, profile, signOut, isPremium } = useAuth()
+  const [open, setOpen] = useState(false)
+  
+  if (!user) return null
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors"
+      >
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold text-sm">
+          {user.email?.[0]?.toUpperCase() || 'U'}
+        </div>
+        {isPremium && <PremiumBadge />}
+      </button>
+      
+      {open && (
+        <motion.div
+          className="absolute right-0 top-12 w-64 bg-card rounded-lg border border-white/10 shadow-xl overflow-hidden z-50"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="p-4 border-b border-white/10">
+            <p className="font-medium truncate">{user.email}</p>
+            <p className="text-sm text-muted-foreground">
+              {isPremium ? 'Citoyen Premium' : 'Compte gratuit'}
+            </p>
+          </div>
+          <div className="p-2">
+            <button
+              onClick={signOut}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              Déconnexion
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
+// Animated counter component
 function AnimatedCounter({ value, color, label, icon: Icon, delay = 0 }) {
   const [displayValue, setDisplayValue] = useState(0)
   const [isAnimating, setIsAnimating] = useState(true)
@@ -106,19 +469,8 @@ function AnimatedCounter({ value, color, label, icon: Icon, delay = 0 }) {
   )
 }
 
-// Mini score display for history/leaderboard
-function MiniScore({ economy, social, ecology }) {
-  return (
-    <div className="flex gap-2 text-xs">
-      <span className="text-blue-400">💰{economy}</span>
-      <span className="text-white">❤️{social}</span>
-      <span className="text-green-400">🌿{ecology}</span>
-    </div>
-  )
-}
-
 // Result Card Component
-function ResultCard({ result, lawText, cardRef, showShare = true }) {
+function ResultCard({ result, lawText, cardRef }) {
   useEffect(() => {
     if (result?.scores?.overall) {
       triggerConfetti(result.scores.overall)
@@ -134,7 +486,6 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
       transition={{ duration: 0.6, type: "spring" }}
     >
       <Card className="score-card-bg border-0 overflow-hidden shadow-2xl">
-        {/* Tricolor top bar with animation */}
         <motion.div 
           className="h-2 flex"
           initial={{ scaleX: 0 }}
@@ -147,7 +498,6 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
         </motion.div>
         
         <CardContent className="p-6 space-y-6">
-          {/* Header */}
           <div className="text-center space-y-2">
             <motion.div 
               className="flex items-center justify-center gap-2 text-blue-400"
@@ -170,32 +520,12 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
             <p className="text-xs text-muted-foreground">Analyse d'impact présidentiel</p>
           </div>
           
-          {/* Scores with staggered animation */}
           <div className="grid grid-cols-3 gap-3">
-            <AnimatedCounter 
-              value={result.scores.economy} 
-              color="text-blue-400" 
-              label="Économie"
-              icon={TrendingUp}
-              delay={0}
-            />
-            <AnimatedCounter 
-              value={result.scores.social} 
-              color="text-white" 
-              label="Social"
-              icon={Heart}
-              delay={200}
-            />
-            <AnimatedCounter 
-              value={result.scores.ecology} 
-              color="text-green-400" 
-              label="Écologie"
-              icon={Leaf}
-              delay={400}
-            />
+            <AnimatedCounter value={result.scores.economy} color="text-blue-400" label="Économie" icon={TrendingUp} delay={0} />
+            <AnimatedCounter value={result.scores.social} color="text-white" label="Social" icon={Heart} delay={200} />
+            <AnimatedCounter value={result.scores.ecology} color="text-green-400" label="Écologie" icon={Leaf} delay={400} />
           </div>
           
-          {/* Overall Score Badge */}
           {result.scores.overall && (
             <motion.div 
               className="flex justify-center"
@@ -216,7 +546,6 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
             </motion.div>
           )}
           
-          {/* Winners & Losers */}
           <div className="grid grid-cols-2 gap-4">
             <motion.div 
               className="p-4 rounded-xl bg-green-500/10 border border-green-500/30"
@@ -245,7 +574,6 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
             </motion.div>
           </div>
           
-          {/* Butterfly Effect */}
           <motion.div 
             className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30"
             initial={{ y: 30, opacity: 0 }}
@@ -259,7 +587,6 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
             <p className="text-sm text-purple-100 italic">"{result.butterfly_effect}"</p>
           </motion.div>
           
-          {/* Footer */}
           <div className="text-center pt-2 border-t border-white/10">
             <p className="text-xs text-muted-foreground">butterfly.gov • Simulateur politique propulsé par IA</p>
           </div>
@@ -269,7 +596,7 @@ function ResultCard({ result, lawText, cardRef, showShare = true }) {
   )
 }
 
-// Debate Card - Side by side comparison
+// Debate Card
 function DebateCard({ law1Data, law2Data }) {
   const getScoreColor = (score) => {
     if (score >= 60) return 'text-green-400'
@@ -289,7 +616,6 @@ function DebateCard({ law1Data, law2Data }) {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Tricolor bar */}
       <div className="h-2 flex rounded-t-lg overflow-hidden">
         <div className="flex-1 bg-blue-600"></div>
         <div className="flex-1 bg-white"></div>
@@ -301,25 +627,18 @@ function DebateCard({ law1Data, law2Data }) {
           <div className="flex items-center justify-center gap-2 text-purple-400 mb-2">
             <Swords className="w-5 h-5" />
             <span className="text-sm font-medium uppercase tracking-widest">Mode Débat</span>
-            <Swords className="w-5 h-5" />
+            <PremiumBadge />
           </div>
         </div>
         
         <div className="grid grid-cols-2 gap-6">
-          {/* Law 1 */}
-          <motion.div 
-            className="space-y-4"
-            initial={{ x: -30, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
+          <motion.div className="space-y-4" initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
               <h3 className="font-bold text-blue-400 mb-2">LOI A</h3>
               <p className="text-white">"{law1Data.text}"</p>
             </div>
-            
             <div className="grid grid-cols-3 gap-2">
-              {['economy', 'social', 'ecology'].map((key, i) => (
+              {['economy', 'social', 'ecology'].map((key) => (
                 <div key={key} className={`p-3 rounded-lg bg-black/30 text-center ${
                   getWinner(law1Data.analysis.scores[key], law2Data.analysis.scores[key]) === 'left' ? 'ring-2 ring-green-500' : ''
                 }`}>
@@ -332,7 +651,6 @@ function DebateCard({ law1Data, law2Data }) {
                 </div>
               ))}
             </div>
-            
             <div className="text-center">
               <span className={`text-lg font-bold ${getScoreColor(law1Data.analysis.scores.overall)}`}>
                 Score: {law1Data.analysis.scores.overall}/100
@@ -340,20 +658,13 @@ function DebateCard({ law1Data, law2Data }) {
             </div>
           </motion.div>
           
-          {/* Law 2 */}
-          <motion.div 
-            className="space-y-4"
-            initial={{ x: 30, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
+          <motion.div className="space-y-4" initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
               <h3 className="font-bold text-red-400 mb-2">LOI B</h3>
               <p className="text-white">"{law2Data.text}"</p>
             </div>
-            
             <div className="grid grid-cols-3 gap-2">
-              {['economy', 'social', 'ecology'].map((key, i) => (
+              {['economy', 'social', 'ecology'].map((key) => (
                 <div key={key} className={`p-3 rounded-lg bg-black/30 text-center ${
                   getWinner(law1Data.analysis.scores[key], law2Data.analysis.scores[key]) === 'right' ? 'ring-2 ring-green-500' : ''
                 }`}>
@@ -366,7 +677,6 @@ function DebateCard({ law1Data, law2Data }) {
                 </div>
               ))}
             </div>
-            
             <div className="text-center">
               <span className={`text-lg font-bold ${getScoreColor(law2Data.analysis.scores.overall)}`}>
                 Score: {law2Data.analysis.scores.overall}/100
@@ -375,7 +685,6 @@ function DebateCard({ law1Data, law2Data }) {
           </motion.div>
         </div>
         
-        {/* Winner announcement */}
         <motion.div 
           className="mt-6 text-center"
           initial={{ scale: 0 }}
@@ -405,17 +714,21 @@ function DebateCard({ law1Data, law2Data }) {
 
 // History Panel
 function HistoryPanel({ onSelectLaw }) {
+  const { getAccessToken } = useAuth()
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   
   useEffect(() => {
-    fetch('/api/history')
-      .then(r => r.json())
-      .then(data => {
-        setHistory(data.history || [])
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+    const fetchHistory = async () => {
+      const token = await getAccessToken()
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      
+      const res = await fetch('/api/history', { headers })
+      const data = await res.json()
+      setHistory(data.history || [])
+      setLoading(false)
+    }
+    fetchHistory()
   }, [])
   
   if (loading) {
@@ -444,18 +757,16 @@ function HistoryPanel({ onSelectLaw }) {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: i * 0.05 }}
-          onClick={() => onSelectLaw(item.law)}
+          onClick={() => onSelectLaw(item.law_text)}
         >
           <div className="flex justify-between items-start gap-2">
-            <p className="text-sm text-white line-clamp-1 flex-1">"{item.law}"</p>
+            <p className="text-sm text-white line-clamp-1 flex-1">"{item.law_text}"</p>
             <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           </div>
-          <div className="mt-1">
-            <MiniScore 
-              economy={item.analysis?.scores?.economy} 
-              social={item.analysis?.scores?.social} 
-              ecology={item.analysis?.scores?.ecology} 
-            />
+          <div className="mt-1 flex gap-2 text-xs">
+            <span className="text-blue-400">💰{item.score_economy}</span>
+            <span className="text-white">❤️{item.score_social}</span>
+            <span className="text-green-400">🌿{item.score_ecology}</span>
           </div>
         </motion.div>
       ))}
@@ -498,9 +809,9 @@ function LeaderboardPanel() {
   
   const categories = [
     { key: 'overall', label: '🏆 Global', color: 'text-yellow-400' },
-    { key: 'economy', label: '💰 Économie', color: 'text-blue-400' },
+    { key: 'economy', label: '💰 Éco', color: 'text-blue-400' },
     { key: 'social', label: '❤️ Social', color: 'text-pink-400' },
-    { key: 'ecology', label: '🌿 Écologie', color: 'text-green-400' },
+    { key: 'ecology', label: '🌿 Écolo', color: 'text-green-400' },
   ]
   
   return (
@@ -549,8 +860,10 @@ function LeaderboardPanel() {
   )
 }
 
-export default function Home() {
-  const [mode, setMode] = useState('single') // single, debate
+// Main App
+function ButterflyApp() {
+  const { user, profile, loading: authLoading, isPremium, getAccessToken } = useAuth()
+  const [mode, setMode] = useState('single')
   const [lawText, setLawText] = useState('')
   const [law1Text, setLaw1Text] = useState('')
   const [law2Text, setLaw2Text] = useState('')
@@ -560,6 +873,8 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [showSidebar, setShowSidebar] = useState(false)
   const [sidebarTab, setSidebarTab] = useState('history')
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [rateLimitExceeded, setRateLimitExceeded] = useState(null)
   const cardRef = useRef(null)
   
   const analyzeLaw = async () => {
@@ -570,15 +885,28 @@ export default function Home() {
     setResult(null)
     
     try {
+      const token = await getAccessToken()
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ law: lawText.trim() })
       })
       
-      if (!response.ok) throw new Error('Erreur lors de l\'analyse')
-      
       const data = await response.json()
+      
+      if (response.status === 429) {
+        setRateLimitExceeded({
+          userTier: data.userTier,
+          resetAt: data.resetAt
+        })
+        return
+      }
+      
+      if (!response.ok) throw new Error(data.error || 'Erreur lors de l\'analyse')
+      
       setResult(data)
     } catch (err) {
       setError(err.message)
@@ -590,29 +918,59 @@ export default function Home() {
   const analyzeDebate = async () => {
     if (!law1Text.trim() || !law2Text.trim()) return
     
+    if (!isPremium) {
+      setError('Le Mode Débat est réservé aux abonnés Premium')
+      return
+    }
+    
     setLoading(true)
     setError(null)
     setDebateResult(null)
     
     try {
+      const token = await getAccessToken()
       const response = await fetch('/api/debate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ law1: law1Text.trim(), law2: law2Text.trim() })
       })
       
-      if (!response.ok) throw new Error('Erreur lors de l\'analyse')
-      
       const data = await response.json()
-      setDebateResult(data)
       
-      // Trigger confetti for the winner
+      if (data.error === 'premium_required') {
+        setError(data.message)
+        return
+      }
+      
+      if (!response.ok) throw new Error(data.error || 'Erreur lors de l\'analyse')
+      
+      setDebateResult(data)
       const winnerScore = Math.max(data.law1.analysis.scores.overall, data.law2.analysis.scores.overall)
       triggerConfetti(winnerScore)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+  
+  const handleUpgrade = async () => {
+    const token = await getAccessToken()
+    if (!token) {
+      setShowAuthModal(true)
+      return
+    }
+    
+    const response = await fetch('/api/stripe/create-checkout', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const data = await response.json()
+    if (data.url) {
+      window.location.href = data.url
     }
   }
   
@@ -634,7 +992,7 @@ export default function Home() {
         URL.revokeObjectURL(url)
       })
       
-      const appUrl = 'https://policy-effect.preview.emergentagent.com'
+      const appUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
       const tweetText = encodeURIComponent(
         `🦋 J'ai passé la loi "${lawText.substring(0, 50)}${lawText.length > 50 ? '...' : ''}" sur Butterfly.gov\n\n` +
         `📊 Mon score présidentiel:\n` +
@@ -656,12 +1014,34 @@ export default function Home() {
     setResult(null)
     setDebateResult(null)
     setError(null)
+    setRateLimitExceeded(null)
   }
   
   const hasResults = mode === 'single' ? result : debateResult
   
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      </div>
+    )
+  }
+  
   return (
     <main className="min-h-screen flex flex-col">
+      {/* Rate Limit Soft Wall */}
+      {rateLimitExceeded && (
+        <SoftWall
+          userTier={rateLimitExceeded.userTier}
+          resetAt={rateLimitExceeded.resetAt}
+          onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }}
+          onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }}
+        />
+      )}
+      
+      {/* Auth Modal */}
+      <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      
       {/* Background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
@@ -669,13 +1049,26 @@ export default function Home() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl"></div>
       </div>
       
-      {/* Sidebar Toggle */}
-      <button
-        onClick={() => setShowSidebar(!showSidebar)}
-        className="fixed top-4 right-4 z-50 p-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors"
-      >
-        {showSidebar ? <X className="w-5 h-5" /> : <History className="w-5 h-5" />}
-      </button>
+      {/* Header */}
+      <header className="relative z-20 flex justify-between items-center p-4">
+        <div></div>
+        <div className="flex items-center gap-2">
+          {user ? (
+            <UserMenu />
+          ) : (
+            <Button onClick={() => setShowAuthModal(true)} variant="outline" size="sm">
+              <User className="w-4 h-4 mr-2" />
+              Connexion
+            </Button>
+          )}
+          <button
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="p-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors"
+          >
+            {showSidebar ? <X className="w-5 h-5" /> : <History className="w-5 h-5" />}
+          </button>
+        </div>
+      </header>
       
       {/* Sidebar */}
       <AnimatePresence>
@@ -687,7 +1080,7 @@ export default function Home() {
             exit={{ x: 320 }}
             transition={{ type: "spring", damping: 20 }}
           >
-            <div className="pt-12">
+            <div className="pt-16">
               <Tabs value={sidebarTab} onValueChange={setSidebarTab}>
                 <TabsList className="w-full mb-4">
                   <TabsTrigger value="history" className="flex-1">
@@ -715,7 +1108,9 @@ export default function Home() {
       
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6">
         <AnimatePresence mode="wait">
-          {!hasResults ? (
+          {loading ? (
+            <AnalysisLoader key="loader" />
+          ) : !hasResults ? (
             <motion.div 
               key="input"
               className="w-full max-w-2xl space-y-8"
@@ -754,11 +1149,13 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setMode('debate')}
-                    className={`px-4 py-2 rounded-full text-sm transition-colors ${
+                    className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${
                       mode === 'debate' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-white'
                     }`}
                   >
-                    <Swords className="w-4 h-4 inline mr-1" /> Débat
+                    {!isPremium && <Lock className="w-3 h-3" />}
+                    <Swords className="w-4 h-4" /> Débat
+                    {isPremium && <PremiumBadge />}
                   </button>
                 </div>
               </div>
@@ -784,16 +1181,24 @@ export default function Home() {
                       disabled={loading || !lawText.trim()}
                       className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"
                     >
-                      {loading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-5 h-5" />
-                      )}
+                      <Sparkles className="w-5 h-5" />
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {!isPremium && (
+                    <div className="text-center p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                      <Lock className="w-6 h-6 mx-auto mb-2 text-yellow-400" />
+                      <p className="text-sm text-yellow-200">
+                        Le Mode Débat est réservé aux abonnés Premium
+                      </p>
+                      <Button onClick={handleUpgrade} className="mt-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black">
+                        <Crown className="w-4 h-4 mr-2" />
+                        Passer Premium - 2,99€/mois
+                      </Button>
+                    </div>
+                  )}
                   <label className="block text-center text-xl text-white/80">
                     Comparez deux propositions de loi
                   </label>
@@ -805,7 +1210,7 @@ export default function Home() {
                         onChange={(e) => setLaw1Text(e.target.value)}
                         placeholder="Première proposition..."
                         className="bg-card border-2 border-blue-500/30 focus:border-blue-500"
-                        disabled={loading}
+                        disabled={loading || !isPremium}
                       />
                     </div>
                     <div className="space-y-2">
@@ -815,21 +1220,17 @@ export default function Home() {
                         onChange={(e) => setLaw2Text(e.target.value)}
                         placeholder="Deuxième proposition..."
                         className="bg-card border-2 border-red-500/30 focus:border-red-500"
-                        disabled={loading}
+                        disabled={loading || !isPremium}
                       />
                     </div>
                   </div>
                   <div className="flex justify-center">
                     <Button
                       onClick={analyzeDebate}
-                      disabled={loading || !law1Text.trim() || !law2Text.trim()}
+                      disabled={loading || !law1Text.trim() || !law2Text.trim() || !isPremium}
                       className="px-8 bg-gradient-to-r from-blue-600 via-purple-600 to-red-500 hover:from-blue-500 hover:via-purple-500 hover:to-red-400"
                     >
-                      {loading ? (
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                      ) : (
-                        <Swords className="w-5 h-5 mr-2" />
-                      )}
+                      <Swords className="w-5 h-5 mr-2" />
                       Lancer le débat
                     </Button>
                   </div>
@@ -846,7 +1247,7 @@ export default function Home() {
                 </motion.p>
               )}
               
-              {/* Examples (single mode only) */}
+              {/* Examples */}
               {mode === 'single' && (
                 <div className="text-center space-y-2">
                   <p className="text-sm text-muted-foreground">Exemples de lois à tester :</p>
@@ -879,8 +1280,6 @@ export default function Home() {
               {mode === 'single' && result ? (
                 <>
                   <ResultCard result={result} lawText={lawText} cardRef={cardRef} />
-                  
-                  {/* Action buttons */}
                   <div className="flex justify-center gap-4">
                     <Button
                       onClick={shareOnTwitter}
@@ -902,7 +1301,6 @@ export default function Home() {
               ) : debateResult ? (
                 <>
                   <DebateCard law1Data={debateResult.law1} law2Data={debateResult.law2} />
-                  
                   <div className="flex justify-center">
                     <Button
                       onClick={reset}
@@ -925,5 +1323,14 @@ export default function Home() {
         Propulsé par l'IA Claude • Les résultats sont fictifs et à but éducatif
       </footer>
     </main>
+  )
+}
+
+// Export with AuthProvider
+export default function Home() {
+  return (
+    <AuthProvider>
+      <ButterflyApp />
+    </AuthProvider>
   )
 }
