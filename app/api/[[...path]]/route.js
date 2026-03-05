@@ -1,11 +1,28 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { MongoClient } from 'mongodb'
+import { v4 as uuidv4 } from 'uuid'
 
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// MongoDB connection
+let cachedClient = null
+async function getMongoClient() {
+  if (cachedClient) return cachedClient
+  const client = new MongoClient(process.env.MONGO_URL)
+  await client.connect()
+  cachedClient = client
+  return client
+}
+
+async function getDb() {
+  const client = await getMongoClient()
+  return client.db('butterfly_gov')
 }
 
 // Initialize Anthropic client
@@ -55,9 +72,12 @@ export async function POST(request, { params }) {
     const path = params?.path || []
     const endpoint = path.join('/')
     
-    // Route: /api/analyze
-    if (endpoint === 'analyze' || endpoint === '') {
+    if (endpoint === 'analyze') {
       return handleAnalyze(request)
+    }
+    
+    if (endpoint === 'debate') {
+      return handleDebate(request)
     }
     
     return NextResponse.json(
@@ -73,25 +93,74 @@ export async function POST(request, { params }) {
   }
 }
 
-// GET handler for health check
+// GET handler
 export async function GET(request, { params }) {
   const path = params?.path || []
   const endpoint = path.join('/')
   
   if (endpoint === 'health') {
     return NextResponse.json(
-      { status: 'ok', service: 'SimulVote / Butterfly.gov' },
+      { status: 'ok', service: 'Butterfly.gov' },
       { headers: corsHeaders }
     )
   }
   
+  if (endpoint === 'history') {
+    return handleGetHistory(request)
+  }
+  
+  if (endpoint === 'leaderboard') {
+    return handleGetLeaderboard(request)
+  }
+  
   return NextResponse.json(
-    { message: 'SimulVote API', endpoints: ['/api/analyze', '/api/health'] },
+    { message: 'Butterfly.gov API', endpoints: ['/api/analyze', '/api/debate', '/api/history', '/api/leaderboard'] },
     { headers: corsHeaders }
   )
 }
 
-// Analyze law proposal
+// Analyze a single law
+async function analyzeLaw(law) {
+  const client = getAnthropicClient()
+  
+  const message = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `Analyse cette proposition de loi: "${law.trim()}"`
+      }
+    ]
+  })
+  
+  const responseText = message.content[0].text
+  
+  // Clean and parse JSON
+  const cleanedText = responseText
+    .replace(/```json\n?/g, '')
+    .replace(/```\n?/g, '')
+    .trim()
+  
+  const analysis = JSON.parse(cleanedText)
+  
+  // Ensure scores are within bounds
+  analysis.scores = {
+    economy: Math.max(0, Math.min(100, analysis.scores.economy || 50)),
+    social: Math.max(0, Math.min(100, analysis.scores.social || 50)),
+    ecology: Math.max(0, Math.min(100, analysis.scores.ecology || 50))
+  }
+  
+  // Calculate overall score
+  analysis.scores.overall = Math.round(
+    (analysis.scores.economy + analysis.scores.social + analysis.scores.ecology) / 3
+  )
+  
+  return analysis
+}
+
+// Handle single law analysis
 async function handleAnalyze(request) {
   const body = await request.json()
   const { law } = body
@@ -111,53 +180,20 @@ async function handleAnalyze(request) {
   }
   
   try {
-    const client = getAnthropicClient()
+    const analysis = await analyzeLaw(law)
     
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `Analyse cette proposition de loi: "${law.trim()}"`
-        }
-      ]
-    })
-    
-    // Extract text content
-    const responseText = message.content[0].text
-    
-    // Parse JSON response
-    let analysis
+    // Save to history
     try {
-      // Clean potential markdown code blocks
-      const cleanedText = responseText
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .trim()
-      analysis = JSON.parse(cleanedText)
-    } catch (parseError) {
-      console.error('JSON Parse Error:', parseError, 'Response:', responseText)
-      return NextResponse.json(
-        { error: 'Erreur lors de l\'analyse de la réponse IA' },
-        { status: 500, headers: corsHeaders }
-      )
-    }
-    
-    // Validate response structure
-    if (!analysis.winners || !analysis.losers || !analysis.butterfly_effect || !analysis.scores) {
-      return NextResponse.json(
-        { error: 'Réponse IA incomplète' },
-        { status: 500, headers: corsHeaders }
-      )
-    }
-    
-    // Ensure scores are within bounds
-    analysis.scores = {
-      economy: Math.max(0, Math.min(100, analysis.scores.economy || 50)),
-      social: Math.max(0, Math.min(100, analysis.scores.social || 50)),
-      ecology: Math.max(0, Math.min(100, analysis.scores.ecology || 50))
+      const db = await getDb()
+      await db.collection('history').insertOne({
+        id: uuidv4(),
+        law: law.trim(),
+        analysis,
+        createdAt: new Date()
+      })
+    } catch (dbError) {
+      console.error('DB Save Error:', dbError)
+      // Continue even if save fails
     }
     
     return NextResponse.json(analysis, { headers: corsHeaders })
@@ -166,6 +202,123 @@ async function handleAnalyze(request) {
     console.error('Anthropic API Error:', error)
     return NextResponse.json(
       { error: 'Erreur lors de la communication avec l\'IA: ' + error.message },
+      { status: 500, headers: corsHeaders }
+    )
+  }
+}
+
+// Handle debate mode (2 laws comparison)
+async function handleDebate(request) {
+  const body = await request.json()
+  const { law1, law2 } = body
+  
+  if (!law1 || !law2) {
+    return NextResponse.json(
+      { error: 'Les deux propositions de loi sont requises' },
+      { status: 400, headers: corsHeaders }
+    )
+  }
+  
+  if (law1.length > 500 || law2.length > 500) {
+    return NextResponse.json(
+      { error: 'Chaque proposition ne doit pas dépasser 500 caractères' },
+      { status: 400, headers: corsHeaders }
+    )
+  }
+  
+  try {
+    // Analyze both laws in parallel
+    const [analysis1, analysis2] = await Promise.all([
+      analyzeLaw(law1),
+      analyzeLaw(law2)
+    ])
+    
+    // Save both to history
+    try {
+      const db = await getDb()
+      await db.collection('history').insertMany([
+        { id: uuidv4(), law: law1.trim(), analysis: analysis1, createdAt: new Date(), isDebate: true },
+        { id: uuidv4(), law: law2.trim(), analysis: analysis2, createdAt: new Date(), isDebate: true }
+      ])
+    } catch (dbError) {
+      console.error('DB Save Error:', dbError)
+    }
+    
+    return NextResponse.json({
+      law1: { text: law1.trim(), analysis: analysis1 },
+      law2: { text: law2.trim(), analysis: analysis2 }
+    }, { headers: corsHeaders })
+    
+  } catch (error) {
+    console.error('Debate Analysis Error:', error)
+    return NextResponse.json(
+      { error: 'Erreur lors de l\'analyse: ' + error.message },
+      { status: 500, headers: corsHeaders }
+    )
+  }
+}
+
+// Get history
+async function handleGetHistory(request) {
+  try {
+    const db = await getDb()
+    const history = await db.collection('history')
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .toArray()
+    
+    return NextResponse.json({ history }, { headers: corsHeaders })
+  } catch (error) {
+    console.error('History Error:', error)
+    return NextResponse.json(
+      { error: 'Erreur lors de la récupération de l\'historique' },
+      { status: 500, headers: corsHeaders }
+    )
+  }
+}
+
+// Get leaderboard
+async function handleGetLeaderboard(request) {
+  try {
+    const db = await getDb()
+    
+    // Get top scores for each category
+    const [topEconomy, topSocial, topEcology, topOverall] = await Promise.all([
+      db.collection('history')
+        .find({})
+        .sort({ 'analysis.scores.economy': -1 })
+        .limit(5)
+        .toArray(),
+      db.collection('history')
+        .find({})
+        .sort({ 'analysis.scores.social': -1 })
+        .limit(5)
+        .toArray(),
+      db.collection('history')
+        .find({})
+        .sort({ 'analysis.scores.ecology': -1 })
+        .limit(5)
+        .toArray(),
+      db.collection('history')
+        .find({})
+        .sort({ 'analysis.scores.overall': -1 })
+        .limit(5)
+        .toArray()
+    ])
+    
+    return NextResponse.json({
+      leaderboard: {
+        economy: topEconomy.map(h => ({ law: h.law, score: h.analysis.scores.economy })),
+        social: topSocial.map(h => ({ law: h.law, score: h.analysis.scores.social })),
+        ecology: topEcology.map(h => ({ law: h.law, score: h.analysis.scores.ecology })),
+        overall: topOverall.map(h => ({ law: h.law, score: h.analysis.scores.overall }))
+      }
+    }, { headers: corsHeaders })
+  } catch (error) {
+    console.error('Leaderboard Error:', error)
+    return NextResponse.json(
+      { error: 'Erreur lors de la récupération du leaderboard' },
       { status: 500, headers: corsHeaders }
     )
   }
