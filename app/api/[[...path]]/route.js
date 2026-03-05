@@ -693,7 +693,7 @@ async function handleStripeWebhook(request) {
         }).eq('id', userId)
       }
       break
-    }
+    } 
     
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
