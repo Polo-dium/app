@@ -206,7 +206,7 @@ async function analyzeLaw(law) {
   })
   
   const { text } = await generateText({
-    model: anthropic(': claude-haiku-4-5-20251001'),
+    model: anthropic(': claude-haiku-4-5-latest'),
     system: SYSTEM_PROMPT,
     prompt: `Analyse cette proposition de loi: "${law.trim()}"`,
     maxTokens: 1024,
