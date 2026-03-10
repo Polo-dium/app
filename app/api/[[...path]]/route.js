@@ -433,14 +433,8 @@ async function handleDebateChat(request) {
   }
   
   try {
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const response = await client.messages.create({
-  model: 'claude-3-5-haiku-20241022',
-  max_tokens: 1024,
-  system: systemWithContext,
-  messages: formattedMessages,
-})
-const text = response.content[0].text
+// Build conversation context
+    const systemWithContext = `${DEBATE_CHAT_PROMPT}
 
 CONTEXTE DE LA LOI DÉBATTUE:
 "${law}"
@@ -452,19 +446,21 @@ SCORES ACTUELS:
 - Score Global: ${currentScores?.overall || 50}/100
 
 Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
-    
-    // Format messages for claude
+
+    // Format messages for Claude
     const formattedMessages = messages.map(m => ({
       role: m.role,
       content: m.content
     }))
-    
-    const { text } = await generateText({
-      model: anthropic('claude-3-5-haiku-20241022'),
+
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const response = await client.messages.create({
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 1024,
       system: systemWithContext,
       messages: formattedMessages,
-      maxTokens: 1024,
     })
+    const text = response.content[0].text    })
     
     // Extract score adjustment from response
     let responseText = text
