@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { generateText } from 'ai'
+import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
@@ -198,37 +197,24 @@ async function getUser(request) {
 // Analyze law with claude
 async function analyzeLaw(law) {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY non configurée. Ajoutez-la dans votre fichier .env')
+    throw new Error('ANTHROPIC_API_KEY non configurée.')
   }
-
-  const anthropic = createAnthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  })
-  
-  const { text } = await generateText({
-    model: anthropic('claude-3-5-haiku-20241022'),
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const message = await client.messages.create({
+    model: 'claude-3-5-haiku-20241022',
+    max_tokens: 1024,
     system: SYSTEM_PROMPT,
-    prompt: `Analyse cette proposition de loi: "${law.trim()}"`,
-    maxTokens: 1024,
+    messages: [{ role: 'user', content: `Analyse cette proposition de loi: "${law.trim()}"` }]
   })
-  
-  const cleanedText = text
-    .replace(/```json\n?/g, '')
-    .replace(/```\n?/g, '')
-    .trim()
-  
-  const analysis = JSON.parse(cleanedText)
-  
+  const text = message.content[0].text
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  const analysis = JSON.parse(clean)
   analysis.scores = {
     economy: Math.max(0, Math.min(100, analysis.scores.economy || 50)),
     social: Math.max(0, Math.min(100, analysis.scores.social || 50)),
     ecology: Math.max(0, Math.min(100, analysis.scores.ecology || 50))
   }
-  
-  analysis.scores.overall = Math.round(
-    (analysis.scores.economy + analysis.scores.social + analysis.scores.ecology) / 3
-  )
-  
+  analysis.scores.overall = Math.round((analysis.scores.economy + analysis.scores.social + analysis.scores.ecology) / 3)
   return analysis
 }
 
@@ -447,12 +433,14 @@ async function handleDebateChat(request) {
   }
   
   try {
-    const anthropic = createAnthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY
-    })
-    
-    // Build conversation context
-    const systemWithContext = `${DEBATE_CHAT_PROMPT}
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const response = await client.messages.create({
+  model: 'claude-3-5-haiku-20241022',
+  max_tokens: 1024,
+  system: systemWithContext,
+  messages: formattedMessages,
+})
+const text = response.content[0].text
 
 CONTEXTE DE LA LOI DÉBATTUE:
 "${law}"
