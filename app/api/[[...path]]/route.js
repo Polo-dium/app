@@ -460,7 +460,7 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
       system: systemWithContext,
       messages: formattedMessages,
     })
-    const text = response.content[0].text    })
+    const text = response.content[0].text
     
     // Extract score adjustment from response
     let responseText = text
