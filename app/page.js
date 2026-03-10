@@ -307,6 +307,70 @@ function ShareButtons({ cardRef, lawText, result }) {
   )
 }
 
+// Debate Share Buttons Component
+function DebateShareButtons({ cardRef, law1Text, law2Text, debateResult }) {
+  const [copied, setCopied] = useState(false)
+  const appUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+
+  const captureAndDownload = async () => {
+    if (!cardRef.current) return
+    const canvas = await html2canvas(cardRef.current, { backgroundColor: '#111111', scale: 2 })
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'butterfly-gov-debat.png'
+        a.click()
+        URL.revokeObjectURL(url)
+        resolve(blob)
+      })
+    })
+  }
+
+  const s1 = debateResult.law1.analysis.scores.overall
+  const s2 = debateResult.law2.analysis.scores.overall
+  const winner = s1 > s2 ? `LOI A (${s1}/100)` : s2 > s1 ? `LOI B (${s2}/100)` : 'ÉGALITÉ'
+
+  const shareOnX = async () => {
+    await captureAndDownload()
+    const text = encodeURIComponent(
+      `⚔️ J'ai comparé deux lois sur Butterfly.gov !\n\n` +
+      `🔵 "${law1Text.substring(0, 40)}${law1Text.length > 40 ? '...' : ''}" → ${s1}/100\n` +
+      `🔴 "${law2Text.substring(0, 40)}${law2Text.length > 40 ? '...' : ''}" → ${s2}/100\n\n` +
+      `🏆 Gagnant : ${winner}\n\nFaites votre propre débat 👇\n${appUrl}`
+    )
+    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank')
+  }
+
+  const shareOnFacebook = async () => {
+    await captureAndDownload()
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(appUrl)}`, '_blank')
+  }
+
+  const shareOnInstagram = async () => {
+    await captureAndDownload()
+    alert('📸 Image téléchargée !\n\nOuvrez Instagram et partagez l\'image depuis votre galerie avec le hashtag #ButterflyGov')
+  }
+
+  const copyToClipboard = async () => {
+    const text = `⚔️ Débat Butterfly.gov\n\n🔵 LOI A: "${law1Text}"\n💰 ${debateResult.law1.analysis.scores.economy} | ❤️ ${debateResult.law1.analysis.scores.social} | 🌿 ${debateResult.law1.analysis.scores.ecology} | ⭐ ${s1}/100\n\n🔴 LOI B: "${law2Text}"\n💰 ${debateResult.law2.analysis.scores.economy} | ❤️ ${debateResult.law2.analysis.scores.social} | 🌿 ${debateResult.law2.analysis.scores.ecology} | ⭐ ${s2}/100\n\n🏆 ${winner}\n\n${appUrl}`
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="flex flex-wrap justify-center gap-2">
+      <Button onClick={shareOnX} className="bg-black hover:bg-gray-900 border border-white/20"><XIcon className="w-4 h-4 mr-2" />X / Twitter</Button>
+      <Button onClick={shareOnFacebook} className="bg-blue-600 hover:bg-blue-500"><Facebook className="w-4 h-4 mr-2" />Facebook</Button>
+      <Button onClick={shareOnInstagram} className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:opacity-90"><Instagram className="w-4 h-4 mr-2" />Instagram</Button>
+      <Button onClick={captureAndDownload} variant="outline" className="border-white/20 hover:bg-white/10"><Download className="w-4 h-4 mr-2" />Télécharger</Button>
+      <Button onClick={copyToClipboard} variant="outline" className="border-white/20 hover:bg-white/10">{copied ? <Check className="w-4 h-4 mr-2 text-green-400" /> : <Copy className="w-4 h-4 mr-2" />}{copied ? 'Copié !' : 'Copier'}</Button>
+    </div>
+  )
+}
+
 // Animated Counter
 function AnimatedCounter({ value, color, label, icon: Icon, delay = 0 }) {
   const [displayValue, setDisplayValue] = useState(0)
@@ -457,7 +521,6 @@ function DebateChatModal({ open, onClose, law, initialResult, getAccessToken }) 
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-purple-400" />
             Mode Débat - L'Opposant Féroce
-            <PremiumBadge />
           </DialogTitle>
           <DialogDescription>Défendez votre loi face à un débatteur impitoyable</DialogDescription>
         </DialogHeader>
@@ -577,6 +640,7 @@ function ButterflyApp() {
   const [rateLimitExceeded, setRateLimitExceeded] = useState(null)
   const [showDebateChat, setShowDebateChat] = useState(false)
   const cardRef = useRef(null)
+  const debateCardRef = useRef(null)
   
   const analyzeLaw = async () => {
     if (!lawText.trim()) return
@@ -672,7 +736,7 @@ function ButterflyApp() {
               <div className="flex justify-center">
                 <div className="inline-flex rounded-full bg-black/30 p-1 border border-white/10">
                   <button onClick={() => setMode('single')} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Loi unique</button>
-                  <button onClick={() => setMode('debate')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'debate' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-white'}`}>{!isPremium && <Lock className="w-3 h-3" />}<Swords className="w-4 h-4" />Débat{isPremium && <PremiumBadge />}</button>
+                  <button onClick={() => setMode('debate')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'debate' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-white'}`}>{!isPremium && <Lock className="w-3 h-3" />}<Swords className="w-4 h-4" />Débat</button>
                 </div>
               </div>
               
@@ -732,10 +796,10 @@ function ButterflyApp() {
                 </>
               ) : debateResult ? (
                 <>
-                  <div className="w-full max-w-5xl mx-auto">
+                  <div className="w-full max-w-5xl mx-auto" ref={debateCardRef}>
                     <div className="h-2 flex rounded-t-lg overflow-hidden"><div className="flex-1 bg-blue-600"></div><div className="flex-1 bg-white"></div><div className="flex-1 bg-red-500"></div></div>
                     <div className="bg-card rounded-b-lg p-6 border border-t-0 border-white/10">
-                      <div className="text-center mb-6"><div className="flex items-center justify-center gap-2 text-purple-400 mb-2"><Swords className="w-5 h-5" /><span className="text-sm font-medium uppercase tracking-widest">Mode Débat</span><PremiumBadge /></div></div>
+                      <div className="text-center mb-6"><div className="flex items-center justify-center gap-2 text-purple-400 mb-2"><Swords className="w-5 h-5" /><span className="text-sm font-medium uppercase tracking-widest">Mode Débat</span></div></div>
                       <div className="grid grid-cols-2 gap-6">
                         {[{ data: debateResult.law1, color: 'blue', label: 'LOI A' }, { data: debateResult.law2, color: 'red', label: 'LOI B' }].map(({ data, color, label }) => (
                           <div key={label} className="space-y-4">
@@ -781,6 +845,7 @@ function ButterflyApp() {
 </div>
                     </div>
                   </div>
+                  <DebateShareButtons cardRef={debateCardRef} law1Text={law1Text} law2Text={law2Text} debateResult={debateResult} />
                   <div className="flex justify-center"><Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button></div>
                 </>
               ) : null}
