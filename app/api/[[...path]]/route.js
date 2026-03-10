@@ -208,7 +208,9 @@ async function analyzeLaw(law) {
   })
   const text = message.content[0].text
   const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  const analysis = JSON.parse(clean)
+  const jsonMatch = clean.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Réponse invalide de l\'IA')
+  const analysis = JSON.parse(jsonMatch[0])
   analysis.scores = {
     economy: Math.max(0, Math.min(100, analysis.scores.economy || 50)),
     social: Math.max(0, Math.min(100, analysis.scores.social || 50)),
@@ -399,30 +401,27 @@ async function handleDebate(request) {
   
   const body = await request.json()
   const { law1, law2 } = body
-  
+
   if (!law1 || !law2) {
-   const verdict = await generateVerdict(law1, law2, analysis1, analysis2)
+    return NextResponse.json({ error: 'Les champs "law1" et "law2" sont requis' }, { status: 400, headers: corsHeaders })
+  }
+
+  const ipAddress = getClientIP(request)
+
+  try {
+    const [analysis1, analysis2] = await Promise.all([analyzeLaw(law1), analyzeLaw(law2)])
+
+    const verdict = await generateVerdict(law1, law2, analysis1, analysis2)
+
+    await Promise.all([
+      saveLawToHistory(law1, analysis1, user?.id, ipAddress, true),
+      saveLawToHistory(law2, analysis2, user?.id, ipAddress, true)
+    ])
 
     return NextResponse.json({
       law1: { text: law1.trim(), analysis: analysis1 },
       law2: { text: law2.trim(), analysis: analysis2 },
       verdict
-    }, { headers: corsHeaders })
-  }
-  
-  const ipAddress = getClientIP(request)
-  
-  try {
-    const [analysis1, analysis2] = await Promise.all([analyzeLaw(law1), analyzeLaw(law2)])
-    
-    await Promise.all([
-      saveLawToHistory(law1, analysis1, user?.id, ipAddress, true),
-      saveLawToHistory(law2, analysis2, user?.id, ipAddress, true)
-    ])
-    
-    return NextResponse.json({
-      law1: { text: law1.trim(), analysis: analysis1 },
-      law2: { text: law2.trim(), analysis: analysis2 }
     }, { headers: corsHeaders })
     
   } catch (error) {
