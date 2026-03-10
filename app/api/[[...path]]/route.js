@@ -195,7 +195,7 @@ async function getUser(request) {
   return { ...user, profile }
 }
 
-// Analyze law with Claude
+// Analyze law with claude
 async function analyzeLaw(law) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY non configurée. Ajoutez-la dans votre fichier .env')
@@ -206,7 +206,7 @@ async function analyzeLaw(law) {
   })
   
   const { text } = await generateText({
-    model: anthropic('Claude-3-haiku-20241022'),
+    model: anthropic('claude-3-5-haiku-20241022'),
     system: SYSTEM_PROMPT,
     prompt: `Analyse cette proposition de loi: "${law.trim()}"`,
     maxTokens: 1024,
@@ -465,14 +465,14 @@ SCORES ACTUELS:
 
 Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
     
-    // Format messages for Claude
+    // Format messages for claude
     const formattedMessages = messages.map(m => ({
       role: m.role,
       content: m.content
     }))
     
     const { text } = await generateText({
-      model: anthropic('Claude-3-haiku-20241022'),
+      model: anthropic('claude-3-5-haiku-20241022'),
       system: systemWithContext,
       messages: formattedMessages,
       maxTokens: 1024,
