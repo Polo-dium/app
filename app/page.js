@@ -450,54 +450,81 @@ function ResultCard({ result, lawText, cardRef }) {
 }
 
 // Debate Chat Modal - "L'Opposant Féroce"
-function DebateChatModal({ open, onClose, law, initialResult, getAccessToken }) {
+function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken }) {
+  const isDebateMode = !!(law1 && law2)
+
+  const buildScores = (sel) => {
+    if (!isDebateMode) return initialResult?.scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
+    if (sel === 'law2') return law2Scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
+    if (sel === 'both') return {
+      economy: Math.round(((law1Scores?.economy || 50) + (law2Scores?.economy || 50)) / 2),
+      social: Math.round(((law1Scores?.social || 50) + (law2Scores?.social || 50)) / 2),
+      ecology: Math.round(((law1Scores?.ecology || 50) + (law2Scores?.ecology || 50)) / 2),
+      overall: Math.round(((law1Scores?.overall || 50) + (law2Scores?.overall || 50)) / 2),
+    }
+    return law1Scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
+  }
+
+  const buildInitialMsg = (sel) => {
+    if (isDebateMode && sel === 'both')
+      return `Ah, le grand dilemme : "${law1}" contre "${law2}"... *soupir théâtral* Deux propositions, deux catastrophes potentielles. Permettez-moi d'être direct : aucune des deux ne tient la route face à un économiste sérieux. Mais puisque vous insistez à jouer au Président, défendez-en une — ou les deux si vous vous en sentez capable.\n\nPar où voulez-vous commencer ce désastre annoncé ?`
+    const l = isDebateMode ? (sel === 'law2' ? law2 : law1) : law
+    return `Ah, "${l}"... *ajuste ses lunettes* Vraiment ? C'est avec ÇA que vous comptez entrer dans l'Histoire ? Permettez-moi d'être direct : je vois au moins trois failles béantes dans votre raisonnement. Mais je suis magnanime, je vais vous laisser une chance de vous défendre.\n\nAlors, Monsieur ou Madame le Président autoproclamé, comment comptez-vous financer cette mesure sans faire exploser le déficit public ?`
+  }
+
+  const [selectedLaw, setSelectedLaw] = useState('law1')
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [currentScores, setCurrentScores] = useState(initialResult?.scores || { economy: 50, social: 50, ecology: 50, overall: 50 })
+  const [currentScores, setCurrentScores] = useState(() => buildScores('law1'))
+  const [summary, setSummary] = useState(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
   const messagesEndRef = useRef(null)
-  
+
+  const resetWithSel = (sel) => {
+    setSelectedLaw(sel)
+    setCurrentScores(buildScores(sel))
+    setMessages([{ role: 'assistant', content: buildInitialMsg(sel) }])
+    setSummary(null)
+    setCopied(false)
+  }
+
   useEffect(() => {
-    if (open && messages.length === 0) {
-      // Initial message from the opponent
-      setMessages([{
-        role: 'assistant',
-        content: `Ah, "${law}"... *ajuste ses lunettes* Vraiment ? C'est avec ÇA que vous comptez entrer dans l'Histoire ? Permettez-moi d'être direct : je vois au moins trois failles béantes dans votre raisonnement. Mais je suis magnanime, je vais vous laisser une chance de vous défendre.\n\nAlors, Monsieur ou Madame le Président autoproclamé, comment comptez-vous financer cette mesure sans faire exploser le déficit public ?`
-      }])
-    }
-  }, [open, law])
-  
+    if (open) resetWithSel(isDebateMode ? 'law1' : 'law1')
+  }, [open])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-  
+
+  const activeLaw = isDebateMode ? (selectedLaw === 'law2' ? law2 : selectedLaw === 'both' ? null : law1) : law
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return
-    
     const userMessage = { role: 'user', content: input.trim() }
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setLoading(true)
-    
     try {
       const token = await getAccessToken()
       const response = await fetch('/api/debate-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
         body: JSON.stringify({
-          law,
+          law: activeLaw,
+          law1: isDebateMode ? law1 : null,
+          law2: isDebateMode ? law2 : null,
+          selectedLaws: isDebateMode ? selectedLaw : 'law1',
           messages: [...messages, userMessage],
           currentScores
         })
       })
-      
       const data = await response.json()
-      
       if (data.error) {
         setMessages(prev => [...prev, { role: 'assistant', content: `Erreur: ${data.message || data.error}` }])
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-        
         if (data.scoreAdjustment?.new_scores) {
           setCurrentScores({
             ...data.scoreAdjustment.new_scores,
@@ -511,12 +538,52 @@ function DebateChatModal({ open, onClose, law, initialResult, getAccessToken }) 
       setLoading(false)
     }
   }
-  
+
+  const generateSummary = async () => {
+    if (messages.length < 3 || summaryLoading) return
+    setSummaryLoading(true)
+    try {
+      const token = await getAccessToken()
+      const response = await fetch('/api/debate-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          law: activeLaw,
+          law1: isDebateMode ? law1 : null,
+          law2: isDebateMode ? law2 : null,
+          selectedLaws: isDebateMode ? selectedLaw : 'law1',
+          messages,
+          currentScores,
+          summarize: true
+        })
+      })
+      const data = await response.json()
+      if (!data.error && data.summary) setSummary(data.summary)
+    } catch (err) {
+      console.error('Summary error:', err)
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
+
+  const copySummary = () => {
+    navigator.clipboard?.writeText(summary)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const getScoreColor = (score) => score >= 60 ? 'text-green-400' : score >= 40 ? 'text-yellow-400' : 'text-red-400'
-  
+
+  const lawLabel = isDebateMode
+    ? selectedLaw === 'both' ? `"${law1}" ⚔️ "${law2}"` : selectedLaw === 'law2' ? `"${law2}"` : `"${law1}"`
+    : `"${law}"`
+
+  const lawBorderClass = selectedLaw === 'law2' ? 'bg-red-500/10 border-red-500/30' : selectedLaw === 'both' ? 'bg-purple-500/10 border-purple-500/30' : 'bg-blue-500/10 border-blue-500/30'
+  const lawTextClass = selectedLaw === 'law2' ? 'text-red-400' : selectedLaw === 'both' ? 'text-purple-400' : 'text-blue-400'
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-white/10 max-w-2xl h-[80vh] flex flex-col">
+      <DialogContent className="bg-card border-white/10 max-w-2xl h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-purple-400" />
@@ -524,7 +591,16 @@ function DebateChatModal({ open, onClose, law, initialResult, getAccessToken }) 
           </DialogTitle>
           <DialogDescription>Défendez votre loi face à un débatteur impitoyable</DialogDescription>
         </DialogHeader>
-        
+
+        {/* Law selector — debate mode only */}
+        {isDebateMode && (
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => resetWithSel('law1')} className={`px-3 py-1.5 rounded-full text-xs transition-colors ${selectedLaw === 'law1' ? 'bg-blue-600 text-white' : 'bg-black/30 text-muted-foreground hover:bg-white/10 border border-white/10'}`}>🔵 LOI A</button>
+            <button onClick={() => resetWithSel('both')} className={`px-3 py-1.5 rounded-full text-xs transition-colors ${selectedLaw === 'both' ? 'bg-purple-600 text-white' : 'bg-black/30 text-muted-foreground hover:bg-white/10 border border-white/10'}`}>⚔️ Les deux</button>
+            <button onClick={() => resetWithSel('law2')} className={`px-3 py-1.5 rounded-full text-xs transition-colors ${selectedLaw === 'law2' ? 'bg-red-600 text-white' : 'bg-black/30 text-muted-foreground hover:bg-white/10 border border-white/10'}`}>🔴 LOI B</button>
+          </div>
+        )}
+
         {/* Score display */}
         <div className="flex justify-center gap-4 py-2 border-b border-white/10">
           <div className="text-center"><span className="text-xs text-muted-foreground">💰 Éco</span><p className={`font-bold ${getScoreColor(currentScores.economy)}`}>{currentScores.economy}</p></div>
@@ -532,13 +608,27 @@ function DebateChatModal({ open, onClose, law, initialResult, getAccessToken }) 
           <div className="text-center"><span className="text-xs text-muted-foreground">🌿 Écolo</span><p className={`font-bold ${getScoreColor(currentScores.ecology)}`}>{currentScores.ecology}</p></div>
           <div className="text-center border-l border-white/10 pl-4"><span className="text-xs text-muted-foreground">⭐ Global</span><p className={`font-bold ${getScoreColor(currentScores.overall)}`}>{currentScores.overall}</p></div>
         </div>
-        
+
         {/* Law being debated */}
-        <div className="px-4 py-2 bg-purple-500/10 rounded-lg border border-purple-500/30">
-          <p className="text-xs text-purple-400 uppercase font-semibold">Loi débattue</p>
-          <p className="text-sm text-white">"{law}"</p>
+        <div className={`px-4 py-2 rounded-lg border ${lawBorderClass}`}>
+          <p className={`text-xs uppercase font-semibold ${lawTextClass}`}>{isDebateMode && selectedLaw === 'both' ? 'Les deux lois' : isDebateMode && selectedLaw === 'law2' ? 'LOI B débattue' : 'LOI A débattue'}</p>
+          <p className="text-sm text-white truncate">{lawLabel}</p>
         </div>
-        
+
+        {/* Summary panel */}
+        {summary && (
+          <motion.div className="p-3 bg-gradient-to-br from-purple-900/40 to-blue-900/40 rounded-lg border border-purple-500/30" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+            <div className="flex justify-between items-center mb-1">
+              <p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé du débat</p>
+              <div className="flex gap-2">
+                <button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">{copied ? '✓ Copié' : 'Copier'}</button>
+                <button onClick={() => setSummary(null)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">×</button>
+              </div>
+            </div>
+            <p className="text-sm text-white/90 whitespace-pre-wrap">{summary}</p>
+          </motion.div>
+        )}
+
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto space-y-4 py-4">
           {messages.map((msg, i) => (
@@ -558,11 +648,20 @@ function DebateChatModal({ open, onClose, law, initialResult, getAccessToken }) 
           )}
           <div ref={messagesEndRef} />
         </div>
-        
-        {/* Input */}
-        <div className="flex gap-2 pt-2 border-t border-white/10">
-          <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Défendez votre position..." className="flex-1 bg-background" disabled={loading} />
-          <Button onClick={sendMessage} disabled={loading || !input.trim()} className="bg-purple-600 hover:bg-purple-500"><Send className="w-4 h-4" /></Button>
+
+        {/* Input + Summary button */}
+        <div className="space-y-2 pt-2 border-t border-white/10">
+          {messages.length >= 3 && (
+            <div className="flex justify-center">
+              <button onClick={generateSummary} disabled={summaryLoading} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 px-3 py-1 rounded-full bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 transition-colors disabled:opacity-50">
+                {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : '📋'} Résumé du débat
+              </button>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Défendez votre position..." className="flex-1 bg-background" disabled={loading} />
+            <Button onClick={sendMessage} disabled={loading || !input.trim()} className="bg-purple-600 hover:bg-purple-500"><Send className="w-4 h-4" /></Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -691,7 +790,7 @@ function ButterflyApp() {
     <main className="min-h-screen flex flex-col">
       {rateLimitExceeded && <SoftWall userTier={rateLimitExceeded.userTier} resetAt={rateLimitExceeded.resetAt} onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }} onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }} />}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
-      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={lawText} initialResult={result} getAccessToken={getAccessToken} />
+      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
@@ -836,8 +935,8 @@ function ButterflyApp() {
   </motion.div>
 )}
 <div className="flex justify-center gap-4 mt-4 flex-wrap">
-  <Button 
-    onClick={() => { setLawText(law1Text); setMode('single'); setShowDebateChat(true) }}
+  <Button
+    onClick={() => setShowDebateChat(true)}
     className="bg-gradient-to-r from-purple-600 to-pink-600"
   >
     <MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA

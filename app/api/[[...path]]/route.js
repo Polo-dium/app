@@ -433,33 +433,72 @@ async function handleDebate(request) {
 // Debate Chat with "L'Opposant Féroce" (Premium only)
 async function handleDebateChat(request) {
   const user = await getUser(request)
-  
+
   // Check premium access
   const supabase = createServiceClient()
   if (supabase && (!user || !user.profile?.is_premium)) {
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'premium_required',
       message: 'Le Mode Débat Chat est réservé aux abonnés Premium.'
     }, { status: 403, headers: corsHeaders })
   }
-  
+
   const body = await request.json()
-  const { law, messages, currentScores } = body
-  
-  if (!law || !messages || !Array.isArray(messages)) {
+  const { law, law1, law2, selectedLaws, messages, currentScores, summarize } = body
+
+  if (!messages || !Array.isArray(messages)) {
     return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400, headers: corsHeaders })
   }
-  
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY non configurée' }, { status: 500, headers: corsHeaders })
   }
-  
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
+
   try {
-// Build conversation context
+    // --- SUMMARY MODE ---
+    if (summarize) {
+      const lawCtx = selectedLaws === 'both' && law1 && law2
+        ? `LOI A: "${law1}" vs LOI B: "${law2}"`
+        : `"${law || law1}"`
+
+      const summarySystem = `Tu es un journaliste politique concis. Résume ce débat sur ${lawCtx} en points clés, sans parti pris.
+
+Format de sortie (respect strict) :
+🔑 Points clés :
+• [argument principal défendu par l'utilisateur]
+• [faille principale identifiée par l'opposant]
+• [concession ou avancée notable, ou "Aucune concession"]
+• [question centrale restée sans réponse]
+
+🏁 Bilan : [1 phrase sur la solidité globale des arguments]
+
+📊 Score final — Économie ${currentScores?.economy || 50} | Social ${currentScores?.social || 50} | Écologie ${currentScores?.ecology || 50} | Global ${currentScores?.overall || 50}/100
+
+Sois factuel, concis, neutre.`
+
+      const summaryResp = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        system: summarySystem,
+        messages: formattedMessages,
+      })
+      return NextResponse.json({ summary: summaryResp.content[0].text }, { headers: corsHeaders })
+    }
+
+    // --- CHAT MODE ---
+    let lawContext
+    if (selectedLaws === 'both' && law1 && law2) {
+      lawContext = `CONTEXTE DES LOIS DÉBATTUES:\nLOI A: "${law1}"\nLOI B: "${law2}"\n\nL'utilisateur peut défendre l'une, l'autre, ou les deux à la fois. Attaque les deux avec la même rigueur.`
+    } else {
+      lawContext = `CONTEXTE DE LA LOI DÉBATTUE:\n"${law || law1}"`
+    }
+
     const systemWithContext = `${DEBATE_CHAT_PROMPT}
 
-CONTEXTE DE LA LOI DÉBATTUE:
-"${law}"
+${lawContext}
 
 SCORES ACTUELS:
 - Économie: ${currentScores?.economy || 50}/100
@@ -469,13 +508,6 @@ SCORES ACTUELS:
 
 Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
 
-    // Format messages for Claude
-    const formattedMessages = messages.map(m => ({
-      role: m.role,
-      content: m.content
-    }))
-
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
@@ -483,12 +515,10 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
       messages: formattedMessages,
     })
     const text = response.content[0].text
-    
-    // Extract score adjustment from response
+
     let responseText = text
     let scoreAdjustment = null
-    
-    // Try to extract JSON from the end of the response
+
     const jsonMatch = text.match(/\{"score_adjustment":\s*(-?\d+),\s*"new_scores":\s*\{[^}]+\}\}/s)
     if (jsonMatch) {
       try {
@@ -498,12 +528,9 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
         console.error('Failed to parse score adjustment:', e)
       }
     }
-    
-    return NextResponse.json({
-      response: responseText,
-      scoreAdjustment: scoreAdjustment
-    }, { headers: corsHeaders })
-    
+
+    return NextResponse.json({ response: responseText, scoreAdjustment }, { headers: corsHeaders })
+
   } catch (error) {
     console.error('Debate Chat Error:', error)
     return NextResponse.json({ error: 'Erreur lors du débat: ' + error.message }, { status: 500, headers: corsHeaders })
