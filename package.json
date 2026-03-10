@@ -10,8 +10,8 @@
         "start": "next start"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^3.0.58",
-        "@anthropic-ai/sdk": "^0.78.0",
+        "@ai-sdk/anthropic": "^4.0.0",
+        "@anthropic-ai/sdk": "^1.0.0",
         "@hookform/resolvers": "^5.1.1",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
