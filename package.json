@@ -10,7 +10,7 @@
         "start": "next start"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.0",
+        "@ai-sdk/anthropic": "^1.0.0",
         "@anthropic-ai/sdk": "^1.0.0",
         "@hookform/resolvers": "^5.1.1",
         "@radix-ui/react-accordion": "^1.2.11",
@@ -43,7 +43,7 @@
         "@supabase/ssr": "^0.9.0",
         "@supabase/supabase-js": "^2.98.0",
         "@tanstack/react-table": "^8.21.3",
-        "ai": "^6.0.116",
+        "ai": "^4.0.0",
         "axios": "^1.10.0",
         "canvas-confetti": "^1.9.4",
         "class-variance-authority": "^0.7.1",
