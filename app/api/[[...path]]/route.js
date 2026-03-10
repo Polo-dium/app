@@ -368,6 +368,23 @@ async function handleAnalyze(request) {
 }
 
 // Debate mode (Premium only)
+async function generateVerdict(law1, law2, analysis1, analysis2) {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 512,
+    messages: [{
+      role: 'user',
+      content: `Tu es un analyste politique cynique et direct. Compare ces deux lois et explique en 3 phrases maximum pourquoi l'une est meilleure que l'autre selon les scores.
+
+LOI A: "${law1}" → Éco:${analysis1.scores.economy} Social:${analysis1.scores.social} Éco:${analysis1.scores.ecology} Global:${analysis1.scores.overall}
+LOI B: "${law2}" → Éco:${analysis2.scores.economy} Social:${analysis2.scores.social} Éco:${analysis2.scores.ecology} Global:${analysis2.scores.overall}
+
+Réponds en français, de manière percutante et sans complaisance. Max 3 phrases.`
+    }]
+  })
+  return response.content[0].text
+}
 async function handleDebate(request) {
   const user = await getUser(request)
   
@@ -384,7 +401,13 @@ async function handleDebate(request) {
   const { law1, law2 } = body
   
   if (!law1 || !law2) {
-    return NextResponse.json({ error: 'Les deux propositions de loi sont requises' }, { status: 400, headers: corsHeaders })
+   const verdict = await generateVerdict(law1, law2, analysis1, analysis2)
+
+    return NextResponse.json({
+      law1: { text: law1.trim(), analysis: analysis1 },
+      law2: { text: law2.trim(), analysis: analysis2 },
+      verdict
+    }, { headers: corsHeaders })
   }
   
   const ipAddress = getClientIP(request)

@@ -761,6 +761,24 @@ function ButterflyApp() {
                           <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"><span className="font-bold">ÉGALITÉ !</span></div>
                         )}
                       </motion.div>
+{debateResult.verdict && (
+  <motion.div 
+    className="mt-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 max-w-2xl mx-auto"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.7 }}
+  >
+    <p className="text-sm text-purple-200 italic text-center">{debateResult.verdict}</p>
+  </motion.div>
+)}
+<div className="flex justify-center gap-4 mt-4 flex-wrap">
+  <Button 
+    onClick={() => { setLawText(law1Text); setMode('single'); setShowDebateChat(true) }}
+    className="bg-gradient-to-r from-purple-600 to-pink-600"
+  >
+    <MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
+  </Button>
+</div>
                     </div>
                   </div>
                   <div className="flex justify-center"><Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button></div>
