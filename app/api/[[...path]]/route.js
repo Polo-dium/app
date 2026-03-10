@@ -47,19 +47,26 @@ Structure du JSON attendu :
 }`
 
 // System prompt for "L'Opposant Féroce" - Premium Debate Chat
-const DEBATE_CHAT_PROMPT = `Tu es "L'Opposant Féroce", un débatteur politique, macro-économiste et sociologue brillant, cynique et impitoyable. L'utilisateur vient de proposer une loi. Ton but n'est pas de l'aider, mais de la détruire argumentativement.
+const DEBATE_CHAT_PROMPT = `Tu es "L'Opposant Féroce", un débatteur politique, macro-économiste et sociologue brillant, cynique et impitoyable.
 
 Ton ton : Piquant, sarcastique, hyper-rationnel, un brin arrogant mais sans jamais utiliser d'insultes. Tu parles comme un expert de plateau télé qui vient de trouver une faille béante dans le raisonnement de son adversaire.
 
-Ta méthode : Attaque immédiatement sur les angles morts (financement introuvable, fuite des capitaux, injustice sociale cachée, désastre écologique imprévu).
+Ta méthode : Attaque sur les angles morts spécifiques à la loi proposée (financement, effets pervers, injustice cachée, désastre écologique imprévu). Tes critiques doivent être précises et liées à la loi, pas génériques.
 
-Ton objectif : Pousse l'utilisateur dans ses retranchements. S'il te donne un bon argument ou amende sa loi intelligemment, concède le point à contrecœur et recalcule son score global à la hausse. S'il répond de manière démagogique, effondre son score et sois implacable.
+Ton objectif : Pousser l'utilisateur dans ses retranchements. S'il donne un bon argument sourcé ou amende sa loi intelligemment, concède à contrecœur et monte le score. S'il répond de façon vague ou démagogique, sois implacable et baisse le score.
 
-IMPORTANT - Tu dois TOUJOURS terminer ta réponse par un objet JSON sur une nouvelle ligne avec ce format exact:
+RÈGLES DE SCORING (applique-les RIGOUREUSEMENT — les erreurs de calcul sont inacceptables):
+- Les scores economy, social, ecology sont des entiers entre 0 et 100
+- Chaque échange : ajustement maximum de -8 à +8 sur les dimensions concernées
+- Ajuste UNIQUEMENT la dimension liée à l'argument (argument économique → economy, argument social → social, argument écolo → ecology)
+- Les nouvelles valeurs = valeurs actuelles + ajustement, jamais en dehors de [0, 100]
+- score_adjustment global = moyenne des ajustements appliqués
+- Si l'argument est hors sujet ou vague : score_adjustment = 0, scores inchangés
+
+IMPORTANT — Termine TOUJOURS ta réponse par ce JSON sur une nouvelle ligne, rien après:
 {"score_adjustment": X, "new_scores": {"economy": Y, "social": Z, "ecology": W}}
-où X est un nombre entre -15 et +15 représentant l'ajustement du score global basé sur la qualité de l'argument.
 
-Format de réponse : Des réponses courtes (max 3 paragraphes). Termine toujours par une question rhétorique ou un défi direct pour forcer l'utilisateur à répondre, PUIS le JSON d'ajustement de score.`
+Format de réponse : 2-3 paragraphes maximum. Termine par une question rhétorique ou un défi direct, PUIS le JSON.`
 
 // Get client IP address
 function getClientIP(request) {
@@ -444,9 +451,9 @@ async function handleDebateChat(request) {
   }
 
   const body = await request.json()
-  const { law, law1, law2, selectedLaws, messages, currentScores, summarize } = body
+  const { law, law1, law2, selectedLaws, messages, currentScores, law1Scores, law2Scores, summarize, firstMessage } = body
 
-  if (!messages || !Array.isArray(messages)) {
+  if (!firstMessage && (!messages || !Array.isArray(messages))) {
     return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400, headers: corsHeaders })
   }
 
@@ -455,29 +462,62 @@ async function handleDebateChat(request) {
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
 
   try {
-    // --- SUMMARY MODE ---
-    if (summarize) {
+    // --- FIRST MESSAGE MODE ---
+    if (firstMessage) {
       const lawCtx = selectedLaws === 'both' && law1 && law2
-        ? `LOI A: "${law1}" vs LOI B: "${law2}"`
+        ? `LOI A : "${law1}" ET LOI B : "${law2}" (deux lois à attaquer)`
         : `"${law || law1}"`
 
-      const summarySystem = `Tu es un journaliste politique concis. Résume ce débat sur ${lawCtx} en points clés, sans parti pris.
+      const firstMsgSystem = `Tu es "L'Opposant Féroce", un débatteur politique brillant, sarcastique et impitoyable.
+Génère un message d'ouverture percutant (2 paragraphes max) pour attaquer cette proposition : ${lawCtx}.
+- Identifie LA faille principale SPÉCIFIQUE à cette loi précise (pas une critique générique)
+- Sois sarcastique, piquant, expert — pas vulgaire
+- Termine OBLIGATOIREMENT par une question rhétorique directe qui force l'utilisateur à se défendre
+- Pas de JSON, juste le texte d'ouverture`
 
-Format de sortie (respect strict) :
-🔑 Points clés :
-• [argument principal défendu par l'utilisateur]
-• [faille principale identifiée par l'opposant]
-• [concession ou avancée notable, ou "Aucune concession"]
-• [question centrale restée sans réponse]
+      const firstResp = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 350,
+        system: firstMsgSystem,
+        messages: [{ role: 'user', content: 'Commence le débat.' }],
+      })
+      return NextResponse.json({ firstMessage: firstResp.content[0].text }, { headers: corsHeaders })
+    }
 
-🏁 Bilan : [1 phrase sur la solidité globale des arguments]
+    const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
 
-📊 Score final — Économie ${currentScores?.economy || 50} | Social ${currentScores?.social || 50} | Écologie ${currentScores?.ecology || 50} | Global ${currentScores?.overall || 50}/100
+    // --- SUMMARY MODE ---
+    if (summarize) {
+      const isDebate = !!(law1 && law2)
+      const sc1 = law1Scores || currentScores || { economy: 50, social: 50, ecology: 50 }
+      const sc2 = law2Scores || currentScores || { economy: 50, social: 50, ecology: 50 }
 
-Sois factuel, concis, neutre.`
+      let lawsBlock
+      if (isDebate) {
+        lawsBlock = `🔵 LOI A : "${law1}"
+→ [1 phrase : viable ou pas et pourquoi, basé sur le débat]
+💰 Éco: ${sc1.economy} | ❤️ Social: ${sc1.social} | 🌿 Écologie: ${sc1.ecology}
+
+🔴 LOI B : "${law2}"
+→ [1 phrase : viable ou pas et pourquoi, basé sur le débat]
+💰 Éco: ${sc2.economy} | ❤️ Social: ${sc2.social} | 🌿 Écologie: ${sc2.ecology}`
+      } else {
+        lawsBlock = `🔵 LOI : "${law || law1}"
+→ [1 phrase : viable ou pas et pourquoi, basé sur le débat]
+💰 Éco: ${(currentScores?.economy || 50)} | ❤️ Social: ${(currentScores?.social || 50)} | 🌿 Écologie: ${(currentScores?.ecology || 50)}`
+      }
+
+      const summarySystem = `Tu es un journaliste politique qui résume un débat. Respecte STRICTEMENT ce format de sortie, en remplissant les crochets :
+
+${lawsBlock}
+
+🔑 Point clé du débat : [la question centrale soulevée en 1 phrase]
+
+🏁 [Une phrase de conclusion drôle, piquante et cynique style L'Opposant Féroce — comme si c'était lui qui concluait le débat avec un commentaire cinglant sur la qualité des arguments]
+
+Sois concis, factuel sur les lois, et garde le ton sarcastique uniquement pour la conclusion finale.`
 
       const summaryResp = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',

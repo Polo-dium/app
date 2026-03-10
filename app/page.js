@@ -465,33 +465,43 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
     return law1Scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
   }
 
-  const buildInitialMsg = (sel) => {
-    if (isDebateMode && sel === 'both')
-      return `Ah, le grand dilemme : "${law1}" contre "${law2}"... *soupir théâtral* Deux propositions, deux catastrophes potentielles. Permettez-moi d'être direct : aucune des deux ne tient la route face à un économiste sérieux. Mais puisque vous insistez à jouer au Président, défendez-en une — ou les deux si vous vous en sentez capable.\n\nPar où voulez-vous commencer ce désastre annoncé ?`
-    const l = isDebateMode ? (sel === 'law2' ? law2 : law1) : law
-    return `Ah, "${l}"... *ajuste ses lunettes* Vraiment ? C'est avec ÇA que vous comptez entrer dans l'Histoire ? Permettez-moi d'être direct : je vois au moins trois failles béantes dans votre raisonnement. Mais je suis magnanime, je vais vous laisser une chance de vous défendre.\n\nAlors, Monsieur ou Madame le Président autoproclamé, comment comptez-vous financer cette mesure sans faire exploser le déficit public ?`
-  }
-
   const [selectedLaw, setSelectedLaw] = useState('law1')
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [firstMsgLoading, setFirstMsgLoading] = useState(false)
   const [currentScores, setCurrentScores] = useState(() => buildScores('law1'))
   const [summary, setSummary] = useState(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const messagesEndRef = useRef(null)
 
-  const resetWithSel = (sel) => {
+  const resetWithSel = async (sel) => {
     setSelectedLaw(sel)
     setCurrentScores(buildScores(sel))
-    setMessages([{ role: 'assistant', content: buildInitialMsg(sel) }])
+    setMessages([])
     setSummary(null)
     setCopied(false)
+    setFirstMsgLoading(true)
+    try {
+      const token = await getAccessToken()
+      const lawForFirst = isDebateMode ? (sel === 'law2' ? law2 : sel === 'both' ? null : law1) : law
+      const resp = await fetch('/api/debate-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ law: lawForFirst, law1: isDebateMode ? law1 : null, law2: isDebateMode ? law2 : null, selectedLaws: isDebateMode ? sel : 'law1', firstMessage: true })
+      })
+      const data = await resp.json()
+      setMessages([{ role: 'assistant', content: data.firstMessage || 'Alors, défendez votre proposition !' }])
+    } catch {
+      setMessages([{ role: 'assistant', content: 'Alors, défendez votre proposition !' }])
+    } finally {
+      setFirstMsgLoading(false)
+    }
   }
 
   useEffect(() => {
-    if (open) resetWithSel(isDebateMode ? 'law1' : 'law1')
+    if (open) resetWithSel('law1')
   }, [open])
 
   useEffect(() => {
@@ -526,9 +536,13 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
         if (data.scoreAdjustment?.new_scores) {
+          const clamp = (v) => Math.min(100, Math.max(0, Math.round(v)))
+          const ns = data.scoreAdjustment.new_scores
           setCurrentScores({
-            ...data.scoreAdjustment.new_scores,
-            overall: Math.round((data.scoreAdjustment.new_scores.economy + data.scoreAdjustment.new_scores.social + data.scoreAdjustment.new_scores.ecology) / 3)
+            economy: clamp(ns.economy),
+            social: clamp(ns.social),
+            ecology: clamp(ns.ecology),
+            overall: clamp((ns.economy + ns.social + ns.ecology) / 3)
           })
         }
       }
@@ -551,6 +565,8 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
           law: activeLaw,
           law1: isDebateMode ? law1 : null,
           law2: isDebateMode ? law2 : null,
+          law1Scores: isDebateMode ? (selectedLaw === 'law1' ? currentScores : law1Scores) : null,
+          law2Scores: isDebateMode ? (selectedLaw === 'law2' ? currentScores : law2Scores) : null,
           selectedLaws: isDebateMode ? selectedLaw : 'law1',
           messages,
           currentScores,
@@ -631,6 +647,14 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
 
         {/* Chat messages */}
         <div className="flex-1 overflow-y-auto space-y-4 py-4">
+          {firstMsgLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white/10 rounded-2xl px-4 py-3 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                <p className="text-xs text-purple-400">L'Opposant prépare son attaque...</p>
+              </div>
+            </div>
+          )}
           {messages.map((msg, i) => (
             <motion.div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>
@@ -659,8 +683,8 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
             </div>
           )}
           <div className="flex gap-2">
-            <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Défendez votre position..." className="flex-1 bg-background" disabled={loading} />
-            <Button onClick={sendMessage} disabled={loading || !input.trim()} className="bg-purple-600 hover:bg-purple-500"><Send className="w-4 h-4" /></Button>
+            <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder={firstMsgLoading ? "L'Opposant prépare son attaque..." : "Défendez votre position..."} className="flex-1 bg-background" disabled={loading || firstMsgLoading} />
+            <Button onClick={sendMessage} disabled={loading || firstMsgLoading || !input.trim()} className="bg-purple-600 hover:bg-purple-500"><Send className="w-4 h-4" /></Button>
           </div>
         </div>
       </DialogContent>
