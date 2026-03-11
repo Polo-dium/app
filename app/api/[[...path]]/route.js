@@ -14,11 +14,17 @@ const corsHeaders = {
 // In-memory rate limiting (fallback when Supabase not configured)
 const rateLimitStore = new Map()
 
-// Rate limit configuration
+// Rate limit configuration (analyze)
 const RATE_LIMITS = {
   anonymous: { max: 5, windowMs: 60 * 60 * 1000 }, // 5 per hour
   free: { max: 10, windowMs: 60 * 60 * 1000 },     // 10 per hour
   premium: { max: 1000, windowMs: 60 * 60 * 1000 } // Unlimited essentially
+}
+
+// Rate limit configuration (debate chat messages — free users)
+const DEBATE_CHAT_LIMITS = {
+  free:    { max: 10,   windowMs: 60 * 60 * 1000 }, // 10 messages/h
+  premium: { max: 1000, windowMs: 60 * 60 * 1000 }  // Unlimited
 }
 
 // System prompt for Butterfly.gov analysis
@@ -174,6 +180,71 @@ async function checkRateLimit(identifier, identifierType, userTier = 'anonymous'
   record.count++
   rateLimitStore.set(key, record)
   return { allowed: true, remaining: limits.max - record.count, resetAt: new Date(record.windowStart + limits.windowMs) }
+}
+
+// Rate limit for debate chat messages (separate bucket, prefix dc:)
+async function checkDebateChatRateLimit(userId, userTier) {
+  if (userTier === 'premium') {
+    return { allowed: true, remaining: 999, resetAt: new Date(Date.now() + 3600000) }
+  }
+  const limits = DEBATE_CHAT_LIMITS.free
+  const dcId = `dc:${userId}`
+  const windowMs = limits.windowMs
+  const supabase = createServiceClient()
+
+  if (supabase) {
+    try {
+      const { data: existing, error: fetchErr } = await supabase
+        .from('rate_limits').select('*')
+        .eq('identifier', dcId).eq('identifier_type', 'user').single()
+
+      if (fetchErr && fetchErr.code !== 'PGRST116') {
+        // DB error → allow through
+        return { allowed: true, remaining: limits.max, resetAt: new Date(Date.now() + windowMs) }
+      }
+
+      const now = new Date()
+      const windowStart = new Date(Date.now() - windowMs)
+
+      if (!existing) {
+        await supabase.from('rate_limits').insert({ identifier: dcId, identifier_type: 'user', request_count: 1, window_start: now })
+        return { allowed: true, remaining: limits.max - 1, resetAt: new Date(Date.now() + windowMs) }
+      }
+
+      if (new Date(existing.window_start) < windowStart) {
+        await supabase.from('rate_limits').update({ request_count: 1, window_start: now })
+          .eq('identifier', dcId).eq('identifier_type', 'user')
+        return { allowed: true, remaining: limits.max - 1, resetAt: new Date(Date.now() + windowMs) }
+      }
+
+      if (existing.request_count >= limits.max) {
+        const resetAt = new Date(new Date(existing.window_start).getTime() + windowMs)
+        return { allowed: false, remaining: 0, resetAt, message: `Vous avez utilisé vos ${limits.max} messages de débat gratuits cette heure. Passez Premium pour débattre sans limite !` }
+      }
+
+      await supabase.from('rate_limits').update({ request_count: existing.request_count + 1 })
+        .eq('identifier', dcId).eq('identifier_type', 'user')
+      return { allowed: true, remaining: limits.max - existing.request_count - 1, resetAt: new Date(new Date(existing.window_start).getTime() + windowMs) }
+    } catch (err) {
+      console.error('Debate chat rate limit error:', err)
+    }
+  }
+
+  // In-memory fallback
+  const key = `dc:user:${userId}`
+  const now = Date.now()
+  let record = rateLimitStore.get(key)
+  if (!record || record.windowStart < now - windowMs) {
+    record = { count: 1, windowStart: now }
+    rateLimitStore.set(key, record)
+    return { allowed: true, remaining: limits.max - 1, resetAt: new Date(now + windowMs) }
+  }
+  if (record.count >= limits.max) {
+    return { allowed: false, remaining: 0, resetAt: new Date(record.windowStart + windowMs), message: `Vous avez utilisé vos ${limits.max} messages de débat gratuits cette heure. Passez Premium pour débattre sans limite !` }
+  }
+  record.count++
+  rateLimitStore.set(key, record)
+  return { allowed: true, remaining: limits.max - record.count, resetAt: new Date(record.windowStart + windowMs) }
 }
 
 // Get user from auth header
@@ -440,21 +511,35 @@ async function handleDebate(request) {
   }
 }
 
-// Debate Chat with "L'Opposant Féroce" (Premium only)
+// Debate Chat with "L'Opposant Féroce" (Free with limit / Premium unlimited)
 async function handleDebateChat(request) {
   const user = await getUser(request)
 
-  // Check premium access
-  const supabase = createServiceClient()
-  if (supabase && (!user || !user.profile?.is_premium)) {
+  // Require authentication (no anonymous access)
+  if (!user) {
     return NextResponse.json({
-      error: 'premium_required',
-      message: 'Le Mode Débat Chat est réservé aux abonnés Premium.'
-    }, { status: 403, headers: corsHeaders })
+      error: 'auth_required',
+      message: 'Connectez-vous pour accéder au Débat IA.'
+    }, { status: 401, headers: corsHeaders })
   }
 
   const body = await request.json()
   const { law, law1, law2, selectedLaws, messages, currentScores, law1Scores, law2Scores, summarize, firstMessage } = body
+
+  // Rate limit only actual chat messages (not firstMessage greeting or summarize)
+  if (!firstMessage && !summarize) {
+    const userTier = user.profile?.is_premium ? 'premium' : 'free'
+    const rateLimit = await checkDebateChatRateLimit(user.id, userTier)
+    if (!rateLimit.allowed) {
+      return NextResponse.json({
+        error: 'rate_limit_exceeded',
+        message: rateLimit.message,
+        remaining: 0,
+        resetAt: rateLimit.resetAt,
+        userTier
+      }, { status: 429, headers: corsHeaders })
+    }
+  }
 
   if (!firstMessage && (!messages || !Array.isArray(messages))) {
     return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400, headers: corsHeaders })

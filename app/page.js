@@ -215,7 +215,7 @@ function SoftWall({ userTier, resetAt, onSignIn, onUpgrade }) {
         <div className="space-y-3">
           {userTier === 'anonymous' && <Button onClick={onSignIn} className="w-full bg-blue-600 hover:bg-blue-500"><User className="w-4 h-4 mr-2" />Créer un compte gratuit (+5 tests/h)</Button>}
           <Button onClick={onUpgrade} className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"><Crown className="w-4 h-4 mr-2" />Passer Premium (2,99€/mois) - Illimité</Button>
-          <p className="text-xs text-center text-muted-foreground">Premium = Tests illimités + Mode Débat Chat exclusif</p>
+          <p className="text-xs text-center text-muted-foreground">Premium = Tests illimités + Débat IA illimité (sans limite de 10/h)</p>
         </div>
       </motion.div>
     </motion.div>
@@ -501,7 +501,7 @@ function DebateSummaryCard({ data, onClose, onCopy, copied }) {
 }
 
 // Debate Chat Modal - "L'Opposant Féroce"
-function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken }) {
+function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken, onUpgrade, onSignIn }) {
   const isDebateMode = !!(law1 && law2)
 
   const DEF = { economy: 50, social: 50, ecology: 50, faisabilite: 50, overall: 50 }
@@ -544,7 +544,11 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
         body: JSON.stringify({ law: lawForFirst, law1: isDebateMode ? law1 : null, law2: isDebateMode ? law2 : null, selectedLaws: isDebateMode ? sel : 'law1', firstMessage: true })
       })
       const data = await resp.json()
-      setMessages([{ role: 'assistant', content: data.firstMessage || 'Alors, défendez votre proposition !' }])
+      if (data.error === 'auth_required') {
+        setMessages([{ role: 'system', type: 'auth_required' }])
+      } else {
+        setMessages([{ role: 'assistant', content: data.firstMessage || 'Alors, défendez votre proposition !' }])
+      }
     } catch {
       setMessages([{ role: 'assistant', content: 'Alors, défendez votre proposition !' }])
     } finally {
@@ -583,7 +587,12 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
         })
       })
       const data = await response.json()
-      if (data.error) {
+      if (data.error === 'rate_limit_exceeded') {
+        const resetMinutes = data.resetAt ? Math.max(1, Math.ceil((new Date(data.resetAt) - new Date()) / 60000)) : 60
+        setMessages(prev => [...prev, { role: 'system', type: 'rate_limit', minutes: resetMinutes }])
+      } else if (data.error === 'auth_required') {
+        setMessages(prev => [...prev, { role: 'system', type: 'auth_required' }])
+      } else if (data.error) {
         setMessages(prev => [...prev, { role: 'assistant', content: `Erreur: ${data.message || data.error}` }])
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
@@ -724,11 +733,25 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
                 </div>
               )}
               {messages.map((msg, i) => (
-                <motion.div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>
-                    {msg.role === 'assistant' && <p className="text-xs text-purple-400 mb-1 font-semibold">🎭 L'Opposant Féroce</p>}
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  </div>
+                <motion.div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : msg.role === 'system' ? 'justify-center' : 'justify-start'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  {msg.role === 'system' && msg.type === 'rate_limit' ? (
+                    <div className="max-w-[90%] rounded-2xl px-4 py-3 bg-orange-500/20 border border-orange-500/40 text-center space-y-2">
+                      <p className="text-sm font-semibold text-orange-300">⏳ Limite atteinte</p>
+                      <p className="text-xs text-orange-200">10 messages/h pour les comptes gratuits. Réessayez dans {msg.minutes} min.</p>
+                      {onUpgrade && <button onClick={onUpgrade} className="mt-1 px-4 py-1.5 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-full text-xs font-bold hover:from-yellow-400 hover:to-orange-400 transition-all">👑 Passer Premium – Illimité</button>}
+                    </div>
+                  ) : msg.role === 'system' && msg.type === 'auth_required' ? (
+                    <div className="max-w-[90%] rounded-2xl px-4 py-3 bg-blue-500/20 border border-blue-500/40 text-center space-y-2">
+                      <p className="text-sm font-semibold text-blue-300">🔒 Connexion requise</p>
+                      <p className="text-xs text-blue-200">Connectez-vous pour débattre avec l'IA.</p>
+                      {onSignIn && <button onClick={onSignIn} className="mt-1 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-xs font-bold transition-all">Se connecter</button>}
+                    </div>
+                  ) : (
+                    <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>
+                      {msg.role === 'assistant' && <p className="text-xs text-purple-400 mb-1 font-semibold">🎭 L'Opposant Féroce</p>}
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  )}
                 </motion.div>
               ))}
               {loading && (
@@ -892,7 +915,7 @@ function ButterflyApp() {
     <main className="min-h-screen flex flex-col">
       {rateLimitExceeded && <SoftWall userTier={rateLimitExceeded.userTier} resetAt={rateLimitExceeded.resetAt} onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }} onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }} />}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
-      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} />
+      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
@@ -987,9 +1010,13 @@ function ButterflyApp() {
                   <ResultCard result={result} lawText={lawText} cardRef={cardRef} />
                   <ShareButtons cardRef={cardRef} lawText={lawText} result={result} />
                   <div className="flex justify-center gap-4 flex-wrap">
-                    {isPremium && (
+                    {user ? (
                       <Button onClick={() => setShowDebateChat(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500">
-                        <MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
+                        <MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA{!isPremium && <span className="ml-1.5 text-xs opacity-70 font-normal">(10/h)</span>}
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setShowAuthModal(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 opacity-80">
+                        <Lock className="w-3 h-3 mr-1.5" /><MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
                       </Button>
                     )}
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle loi</Button>
