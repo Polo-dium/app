@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -416,10 +416,11 @@ function ResultCard({ result, lawText, cardRef }) {
             <motion.h2 className="text-xl font-bold text-white leading-tight" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>"{lawText}"</motion.h2>
             <p className="text-xs text-muted-foreground">Analyse d'impact présidentiel</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <AnimatedCounter value={result.scores.economy} color="text-blue-400" label="Économie" icon={TrendingUp} delay={0} />
             <AnimatedCounter value={result.scores.social} color="text-white" label="Social" icon={Heart} delay={200} />
             <AnimatedCounter value={result.scores.ecology} color="text-green-400" label="Écologie" icon={Leaf} delay={400} />
+            <AnimatedCounter value={result.scores.faisabilite ?? 50} color="text-orange-400" label="Faisabilité" icon={Wrench} delay={600} />
           </div>
           {result.scores.overall && (
             <motion.div className="flex justify-center" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8, type: "spring" }}>
@@ -449,20 +450,69 @@ function ResultCard({ result, lawText, cardRef }) {
   )
 }
 
+// Debate Summary Card
+function DebateSummaryCard({ data, onClose, onCopy, copied }) {
+  const getScoreColor = (s) => (s ?? 50) >= 60 ? 'text-green-400' : (s ?? 50) >= 40 ? 'text-yellow-400' : 'text-red-400'
+  const scoreKeys = [['💰','economy','Éco'],['❤️','social','Social'],['🌿','ecology','Écolo'],['⚙️','faisabilite','Faisab.']]
+  return (
+    <motion.div className="space-y-2 overflow-y-auto" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="flex justify-between items-center">
+        <p className="text-xs text-purple-400 uppercase font-semibold tracking-widest">📋 Résumé du débat</p>
+        <div className="flex gap-2">
+          <button onClick={onCopy} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">{copied ? '✓ Copié' : 'Copier'}</button>
+          <button onClick={onClose} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">Fermer ×</button>
+        </div>
+      </div>
+      {data.laws?.map((l) => {
+        const isA = l.label !== 'LOI B'
+        return (
+          <div key={l.label} className={`p-3 rounded-lg border ${isA ? 'bg-blue-500/10 border-blue-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+            <div className="flex justify-between items-center mb-1">
+              <span className={`text-xs font-bold ${isA ? 'text-blue-400' : 'text-red-400'}`}>{l.label}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${l.viable ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>{l.viable ? '✓ Viable' : '✗ Non viable'}</span>
+            </div>
+            <p className="text-xs text-white/70 italic mb-1 line-clamp-1">"{l.text}"</p>
+            <p className="text-xs text-white/60 mb-2">{l.reason}</p>
+            <div className="grid grid-cols-4 gap-1">
+              {scoreKeys.map(([emoji, key, label]) => (
+                <div key={key} className="text-center bg-black/20 rounded py-1">
+                  <div className="text-xs leading-none">{emoji}</div>
+                  <div className={`text-sm font-bold ${getScoreColor(l.scores?.[key])}`}>{l.scores?.[key] ?? 50}</div>
+                  <div className="text-[10px] text-muted-foreground leading-none">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      {data.keyPoint && (
+        <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+          <p className="text-xs text-purple-400 font-semibold mb-0.5">🔑 Point clé du débat</p>
+          <p className="text-xs text-white/80">{data.keyPoint}</p>
+        </div>
+      )}
+      {data.conclusion && (
+        <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+          <p className="text-xs text-purple-200 italic">"{data.conclusion}"</p>
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 // Debate Chat Modal - "L'Opposant Féroce"
 function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken }) {
   const isDebateMode = !!(law1 && law2)
 
+  const DEF = { economy: 50, social: 50, ecology: 50, faisabilite: 50, overall: 50 }
   const buildScores = (sel) => {
-    if (!isDebateMode) return initialResult?.scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
-    if (sel === 'law2') return law2Scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
-    if (sel === 'both') return {
-      economy: Math.round(((law1Scores?.economy || 50) + (law2Scores?.economy || 50)) / 2),
-      social: Math.round(((law1Scores?.social || 50) + (law2Scores?.social || 50)) / 2),
-      ecology: Math.round(((law1Scores?.ecology || 50) + (law2Scores?.ecology || 50)) / 2),
-      overall: Math.round(((law1Scores?.overall || 50) + (law2Scores?.overall || 50)) / 2),
+    if (!isDebateMode) return initialResult?.scores || DEF
+    if (sel === 'law2') return law2Scores || DEF
+    if (sel === 'both') {
+      const avg = (k) => Math.round(((law1Scores?.[k] || 50) + (law2Scores?.[k] || 50)) / 2)
+      return { economy: avg('economy'), social: avg('social'), ecology: avg('ecology'), faisabilite: avg('faisabilite'), overall: avg('overall') }
     }
-    return law1Scores || { economy: 50, social: 50, ecology: 50, overall: 50 }
+    return law1Scores || DEF
   }
 
   const [selectedLaw, setSelectedLaw] = useState('law1')
@@ -471,7 +521,8 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
   const [loading, setLoading] = useState(false)
   const [firstMsgLoading, setFirstMsgLoading] = useState(false)
   const [currentScores, setCurrentScores] = useState(() => buildScores('law1'))
-  const [summary, setSummary] = useState(null)
+  const [summaryData, setSummaryData] = useState(null)  // parsed JSON or null
+  const [summaryMode, setSummaryMode] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const messagesEndRef = useRef(null)
@@ -480,7 +531,8 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
     setSelectedLaw(sel)
     setCurrentScores(buildScores(sel))
     setMessages([])
-    setSummary(null)
+    setSummaryData(null)
+    setSummaryMode(false)
     setCopied(false)
     setFirstMsgLoading(true)
     try {
@@ -536,14 +588,13 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
         if (data.scoreAdjustment?.new_scores) {
-          const clamp = (v) => Math.min(100, Math.max(0, Math.round(v)))
+          const clamp = (v, fb = 50) => Math.min(100, Math.max(0, Math.round(v ?? fb)))
           const ns = data.scoreAdjustment.new_scores
-          setCurrentScores({
-            economy: clamp(ns.economy),
-            social: clamp(ns.social),
-            ecology: clamp(ns.ecology),
-            overall: clamp((ns.economy + ns.social + ns.ecology) / 3)
-          })
+          const eco = clamp(ns.economy)
+          const soc = clamp(ns.social)
+          const ecl = clamp(ns.ecology)
+          const fai = clamp(ns.faisabilite, currentScores.faisabilite)
+          setCurrentScores({ economy: eco, social: soc, ecology: ecl, faisabilite: fai, overall: clamp((eco + soc + ecl + fai) / 4) })
         }
       }
     } catch (err) {
@@ -574,7 +625,17 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
         })
       })
       const data = await response.json()
-      if (!data.error && data.summary) setSummary(data.summary)
+      if (!data.error && data.summary) {
+        // Try to parse as JSON (structured summary)
+        try {
+          const parsed = JSON.parse(data.summary)
+          setSummaryData(parsed)
+        } catch {
+          // Fallback: wrap raw text in a compatible structure
+          setSummaryData({ raw: data.summary })
+        }
+        setSummaryMode(true)
+      }
     } catch (err) {
       console.error('Summary error:', err)
     } finally {
@@ -582,8 +643,22 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
     }
   }
 
+  const formatSummaryText = (sd) => {
+    if (!sd) return ''
+    if (sd.raw) return sd.raw
+    let t = '📋 Résumé du débat Butterfly.gov\n\n'
+    sd.laws?.forEach(l => {
+      t += `${l.label === 'LOI B' ? '🔴' : '🔵'} ${l.label}: "${l.text}"\n`
+      t += `${l.viable ? '✓ Viable' : '✗ Non viable'} — ${l.reason}\n`
+      t += `💰 ${l.scores?.economy ?? 50} | ❤️ ${l.scores?.social ?? 50} | 🌿 ${l.scores?.ecology ?? 50} | ⚙️ ${l.scores?.faisabilite ?? 50}\n\n`
+    })
+    if (sd.keyPoint) t += `🔑 ${sd.keyPoint}\n\n`
+    if (sd.conclusion) t += `🏁 "${sd.conclusion}"`
+    return t
+  }
+
   const copySummary = () => {
-    navigator.clipboard?.writeText(summary)
+    navigator.clipboard?.writeText(formatSummaryText(summaryData))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -618,11 +693,12 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
         )}
 
         {/* Score display */}
-        <div className="flex justify-center gap-4 py-2 border-b border-white/10">
+        <div className="flex justify-center gap-3 py-2 border-b border-white/10">
           <div className="text-center"><span className="text-xs text-muted-foreground">💰 Éco</span><p className={`font-bold ${getScoreColor(currentScores.economy)}`}>{currentScores.economy}</p></div>
           <div className="text-center"><span className="text-xs text-muted-foreground">❤️ Social</span><p className={`font-bold ${getScoreColor(currentScores.social)}`}>{currentScores.social}</p></div>
           <div className="text-center"><span className="text-xs text-muted-foreground">🌿 Écolo</span><p className={`font-bold ${getScoreColor(currentScores.ecology)}`}>{currentScores.ecology}</p></div>
-          <div className="text-center border-l border-white/10 pl-4"><span className="text-xs text-muted-foreground">⭐ Global</span><p className={`font-bold ${getScoreColor(currentScores.overall)}`}>{currentScores.overall}</p></div>
+          <div className="text-center"><span className="text-xs text-muted-foreground">⚙️ Faisab.</span><p className={`font-bold ${getScoreColor(currentScores.faisabilite ?? 50)}`}>{currentScores.faisabilite ?? 50}</p></div>
+          <div className="text-center border-l border-white/10 pl-3"><span className="text-xs text-muted-foreground">⭐ Global</span><p className={`font-bold ${getScoreColor(currentScores.overall)}`}>{currentScores.overall}</p></div>
         </div>
 
         {/* Law being debated */}
@@ -631,61 +707,62 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
           <p className="text-sm text-white truncate">{lawLabel}</p>
         </div>
 
-        {/* Summary panel */}
-        {summary && (
-          <motion.div className="p-3 bg-gradient-to-br from-purple-900/40 to-blue-900/40 rounded-lg border border-purple-500/30" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-            <div className="flex justify-between items-center mb-1">
-              <p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé du débat</p>
-              <div className="flex gap-2">
-                <button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">{copied ? '✓ Copié' : 'Copier'}</button>
-                <button onClick={() => setSummary(null)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">×</button>
-              </div>
-            </div>
-            <p className="text-sm text-white/90 whitespace-pre-wrap">{summary}</p>
-          </motion.div>
-        )}
-
-        {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto space-y-4 py-4">
-          {firstMsgLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white/10 rounded-2xl px-4 py-3 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                <p className="text-xs text-purple-400">L'Opposant prépare son attaque...</p>
-              </div>
-            </div>
-          )}
-          {messages.map((msg, i) => (
-            <motion.div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>
-                {msg.role === 'assistant' && <p className="text-xs text-purple-400 mb-1 font-semibold">🎭 L'Opposant Féroce</p>}
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-              </div>
-            </motion.div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white/10 rounded-2xl px-4 py-3">
-                <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
-              </div>
+        {/* Main area: summary card OR chat messages */}
+        <div className="flex-1 overflow-y-auto py-2">
+          {summaryMode && summaryData ? (
+            summaryData.raw
+              ? <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30"><div className="flex justify-between items-center mb-2"><p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé</p><div className="flex gap-2"><button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">{copied ? '✓ Copié' : 'Copier'}</button><button onClick={() => setSummaryMode(false)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">× Fermer</button></div></div><p className="text-sm text-white/90 whitespace-pre-wrap">{summaryData.raw}</p></div>
+              : <DebateSummaryCard data={summaryData} onClose={() => setSummaryMode(false)} onCopy={copySummary} copied={copied} />
+          ) : (
+            <div className="space-y-4 py-2">
+              {firstMsgLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white/10 rounded-2xl px-4 py-3 flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                    <p className="text-xs text-purple-400">L'Opposant prépare son attaque...</p>
+                  </div>
+                </div>
+              )}
+              {messages.map((msg, i) => (
+                <motion.div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>
+                    {msg.role === 'assistant' && <p className="text-xs text-purple-400 mb-1 font-semibold">🎭 L'Opposant Féroce</p>}
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                </motion.div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-white/10 rounded-2xl px-4 py-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
             </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input + Summary button */}
+        {/* Input + Summary/Chat toggle */}
         <div className="space-y-2 pt-2 border-t border-white/10">
-          {messages.length >= 3 && (
-            <div className="flex justify-center">
+          <div className="flex justify-center gap-2">
+            {messages.length >= 3 && !summaryMode && (
               <button onClick={generateSummary} disabled={summaryLoading} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 px-3 py-1 rounded-full bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 transition-colors disabled:opacity-50">
                 {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : '📋'} Résumé du débat
               </button>
+            )}
+            {summaryMode && (
+              <button onClick={() => setSummaryMode(false)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 px-3 py-1 rounded-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 transition-colors">
+                💬 Retour au débat
+              </button>
+            )}
+          </div>
+          {!summaryMode && (
+            <div className="flex gap-2">
+              <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder={firstMsgLoading ? "L'Opposant prépare son attaque..." : "Défendez votre position..."} className="flex-1 bg-background" disabled={loading || firstMsgLoading} />
+              <Button onClick={sendMessage} disabled={loading || firstMsgLoading || !input.trim()} className="bg-purple-600 hover:bg-purple-500"><Send className="w-4 h-4" /></Button>
             </div>
           )}
-          <div className="flex gap-2">
-            <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder={firstMsgLoading ? "L'Opposant prépare son attaque..." : "Défendez votre position..."} className="flex-1 bg-background" disabled={loading || firstMsgLoading} />
-            <Button onClick={sendMessage} disabled={loading || firstMsgLoading || !input.trim()} className="bg-purple-600 hover:bg-purple-500"><Send className="w-4 h-4" /></Button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -722,7 +799,7 @@ function HistoryPanel({ onSelectLaw }) {
 }
 
 // Leaderboard Panel
-function LeaderboardPanel() {
+function LeaderboardPanel({ onSelectLaw }) {
   const [leaderboard, setLeaderboard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('overall')
@@ -732,10 +809,11 @@ function LeaderboardPanel() {
   const categories = [{ key: 'overall', label: '🏆 Global', color: 'text-yellow-400' }, { key: 'economy', label: '💰 Éco', color: 'text-blue-400' }, { key: 'social', label: '❤️ Social', color: 'text-pink-400' }, { key: 'ecology', label: '🌿 Écolo', color: 'text-green-400' }]
   return (
     <div className="space-y-4">
+      {onSelectLaw && <p className="text-xs text-muted-foreground text-center">Cliquez sur une loi pour la tester</p>}
       <div className="flex gap-2 flex-wrap">{categories.map(cat => (<button key={cat.key} onClick={() => setActiveCategory(cat.key)} className={`px-3 py-1 rounded-full text-xs transition-colors ${activeCategory === cat.key ? 'bg-white/20 text-white' : 'bg-black/30 text-muted-foreground hover:bg-white/10'}`}>{cat.label}</button>))}</div>
       <div className="space-y-2">
         {(leaderboard[activeCategory] || []).map((item, i) => (
-          <motion.div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+          <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-yellow-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'}`}>{i + 1}</div>
             <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
             <span className={`font-bold ${categories.find(c => c.key === activeCategory)?.color}`}>{item.score}</span>
@@ -837,7 +915,7 @@ function ButterflyApp() {
               <Tabs value={sidebarTab} onValueChange={setSidebarTab}>
                 <TabsList className="w-full mb-4"><TabsTrigger value="history" className="flex-1"><History className="w-4 h-4 mr-1" />Historique</TabsTrigger><TabsTrigger value="leaderboard" className="flex-1"><Award className="w-4 h-4 mr-1" />Top</TabsTrigger></TabsList>
                 <TabsContent value="history"><HistoryPanel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
-                <TabsContent value="leaderboard"><LeaderboardPanel /></TabsContent>
+                <TabsContent value="leaderboard"><LeaderboardPanel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
               </Tabs>
             </div>
           </motion.div>
@@ -927,11 +1005,11 @@ function ButterflyApp() {
                         {[{ data: debateResult.law1, color: 'blue', label: 'LOI A' }, { data: debateResult.law2, color: 'red', label: 'LOI B' }].map(({ data, color, label }) => (
                           <div key={label} className="space-y-4">
                             <div className={`p-4 rounded-lg bg-${color}-500/10 border border-${color}-500/30`}><h3 className={`font-bold text-${color}-400 mb-2`}>{label}</h3><p className="text-white">"{data.text}"</p></div>
-                            <div className="grid grid-cols-3 gap-2">
-                              {['economy', 'social', 'ecology'].map(key => (
-                                <div key={key} className="p-3 rounded-lg bg-black/30 text-center">
-                                  <div className="text-xs text-muted-foreground uppercase">{key === 'economy' ? '💰' : key === 'social' ? '❤️' : '🌿'}</div>
-                                  <div className={`text-2xl font-bold ${data.analysis.scores[key] >= 60 ? 'text-green-400' : data.analysis.scores[key] >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>{data.analysis.scores[key]}</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[['economy','💰'],['social','❤️'],['ecology','🌿'],['faisabilite','⚙️']].map(([key, emoji]) => (
+                                <div key={key} className="p-2 rounded-lg bg-black/30 text-center">
+                                  <div className="text-xs text-muted-foreground">{emoji}</div>
+                                  <div className={`text-xl font-bold ${(data.analysis.scores[key]??50) >= 60 ? 'text-green-400' : (data.analysis.scores[key]??50) >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>{data.analysis.scores[key] ?? 50}</div>
                                 </div>
                               ))}
                             </div>

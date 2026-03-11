@@ -42,7 +42,8 @@ Structure du JSON attendu :
   "scores": {
     "economy": [Entier de 0 à 100 estimant la santé financière globale, le PIB et l'emploi],
     "social": [Entier de 0 à 100 estimant la paix sociale, la réduction des inégalités et la santé publique],
-    "ecology": [Entier de 0 à 100 estimant l'impact sur le climat, la biodiversité et les ressources]
+    "ecology": [Entier de 0 à 100 estimant l'impact sur le climat, la biodiversité et les ressources],
+    "faisabilite": [Entier de 0 à 100 estimant la faisabilité réelle: budget disponible, consensus politique possible, complexité réglementaire, délai de mise en œuvre]
   }
 }`
 
@@ -56,15 +57,15 @@ Ta méthode : Attaque sur les angles morts spécifiques à la loi proposée (fin
 Ton objectif : Pousser l'utilisateur dans ses retranchements. S'il donne un bon argument sourcé ou amende sa loi intelligemment, concède à contrecœur et monte le score. S'il répond de façon vague ou démagogique, sois implacable et baisse le score.
 
 RÈGLES DE SCORING (applique-les RIGOUREUSEMENT — les erreurs de calcul sont inacceptables):
-- Les scores economy, social, ecology sont des entiers entre 0 et 100
+- Les scores economy, social, ecology, faisabilite sont des entiers entre 0 et 100
 - Chaque échange : ajustement maximum de -8 à +8 sur les dimensions concernées
-- Ajuste UNIQUEMENT la dimension liée à l'argument (argument économique → economy, argument social → social, argument écolo → ecology)
+- Ajuste UNIQUEMENT la dimension liée à l'argument (économique → economy, social → social, écolo → ecology, faisabilité/budget/délai → faisabilite)
 - Les nouvelles valeurs = valeurs actuelles + ajustement, jamais en dehors de [0, 100]
 - score_adjustment global = moyenne des ajustements appliqués
 - Si l'argument est hors sujet ou vague : score_adjustment = 0, scores inchangés
 
 IMPORTANT — Termine TOUJOURS ta réponse par ce JSON sur une nouvelle ligne, rien après:
-{"score_adjustment": X, "new_scores": {"economy": Y, "social": Z, "ecology": W}}
+{"score_adjustment": X, "new_scores": {"economy": Y, "social": Z, "ecology": W, "faisabilite": V}}
 
 Format de réponse : 2-3 paragraphes maximum. Termine par une question rhétorique ou un défi direct, PUIS le JSON.`
 
@@ -218,12 +219,14 @@ async function analyzeLaw(law) {
   const jsonMatch = clean.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('Réponse invalide de l\'IA')
   const analysis = JSON.parse(jsonMatch[0])
+  const clamp = (v, d = 50) => Math.max(0, Math.min(100, Math.round(v ?? d)))
   analysis.scores = {
-    economy: Math.max(0, Math.min(100, analysis.scores.economy || 50)),
-    social: Math.max(0, Math.min(100, analysis.scores.social || 50)),
-    ecology: Math.max(0, Math.min(100, analysis.scores.ecology || 50))
+    economy:     clamp(analysis.scores.economy),
+    social:      clamp(analysis.scores.social),
+    ecology:     clamp(analysis.scores.ecology),
+    faisabilite: clamp(analysis.scores.faisabilite)
   }
-  analysis.scores.overall = Math.round((analysis.scores.economy + analysis.scores.social + analysis.scores.ecology) / 3)
+  analysis.scores.overall = Math.round((analysis.scores.economy + analysis.scores.social + analysis.scores.ecology + analysis.scores.faisabilite) / 4)
   return analysis
 }
 
@@ -386,8 +389,8 @@ async function generateVerdict(law1, law2, analysis1, analysis2) {
       role: 'user',
       content: `Tu es un analyste politique cynique et direct. Compare ces deux lois et explique en 3 phrases maximum pourquoi l'une est meilleure que l'autre selon les scores.
 
-LOI A: "${law1}" → Éco:${analysis1.scores.economy} Social:${analysis1.scores.social} Éco:${analysis1.scores.ecology} Global:${analysis1.scores.overall}
-LOI B: "${law2}" → Éco:${analysis2.scores.economy} Social:${analysis2.scores.social} Éco:${analysis2.scores.ecology} Global:${analysis2.scores.overall}
+LOI A: "${law1}" → Éco:${analysis1.scores.economy} Social:${analysis1.scores.social} Écologie:${analysis1.scores.ecology} Faisabilité:${analysis1.scores.faisabilite} Global:${analysis1.scores.overall}
+LOI B: "${law2}" → Éco:${analysis2.scores.economy} Social:${analysis2.scores.social} Écologie:${analysis2.scores.ecology} Faisabilité:${analysis2.scores.faisabilite} Global:${analysis2.scores.overall}
 
 Réponds en français, de manière percutante et sans complaisance. Max 3 phrases.`
     }]
@@ -491,41 +494,62 @@ Génère un message d'ouverture percutant (2 paragraphes max) pour attaquer cett
     // --- SUMMARY MODE ---
     if (summarize) {
       const isDebate = !!(law1 && law2)
-      const sc1 = law1Scores || currentScores || { economy: 50, social: 50, ecology: 50 }
-      const sc2 = law2Scores || currentScores || { economy: 50, social: 50, ecology: 50 }
+      const sc1 = law1Scores || currentScores || { economy: 50, social: 50, ecology: 50, faisabilite: 50 }
+      const sc2 = law2Scores || currentScores || { economy: 50, social: 50, ecology: 50, faisabilite: 50 }
+      const sc0 = currentScores || { economy: 50, social: 50, ecology: 50, faisabilite: 50 }
 
-      let lawsBlock
-      if (isDebate) {
-        lawsBlock = `🔵 LOI A : "${law1}"
-→ [1 phrase : viable ou pas et pourquoi, basé sur le débat]
-💰 Éco: ${sc1.economy} | ❤️ Social: ${sc1.social} | 🌿 Écologie: ${sc1.ecology}
+      // Format conversation as readable text (not as messages array — avoids model continuing the chat)
+      const convoText = formattedMessages
+        .map(m => `${m.role === 'user' ? 'UTILISATEUR' : "L'OPPOSANT"}: ${m.content}`)
+        .join('\n\n---\n\n')
 
-🔴 LOI B : "${law2}"
-→ [1 phrase : viable ou pas et pourquoi, basé sur le débat]
-💰 Éco: ${sc2.economy} | ❤️ Social: ${sc2.social} | 🌿 Écologie: ${sc2.ecology}`
-      } else {
-        lawsBlock = `🔵 LOI : "${law || law1}"
-→ [1 phrase : viable ou pas et pourquoi, basé sur le débat]
-💰 Éco: ${(currentScores?.economy || 50)} | ❤️ Social: ${(currentScores?.social || 50)} | 🌿 Écologie: ${(currentScores?.ecology || 50)}`
-      }
+      const lawsJson = isDebate
+        ? JSON.stringify([
+            { label: 'LOI A', text: law1, scores: sc1 },
+            { label: 'LOI B', text: law2, scores: sc2 }
+          ])
+        : JSON.stringify([
+            { label: 'LOI', text: law || law1, scores: sc0 }
+          ])
 
-      const summarySystem = `Tu es un journaliste politique qui résume un débat. Respecte STRICTEMENT ce format de sortie, en remplissant les crochets :
+      const summarySystem = `Tu es un journaliste politique qui analyse un débat. Retourne UNIQUEMENT un objet JSON valide (rien d'autre, pas de markdown, pas de texte autour).
 
-${lawsBlock}
+Lois à analyser (scores déjà calculés, ne les change pas) : ${lawsJson}
 
-🔑 Point clé du débat : [la question centrale soulevée en 1 phrase]
-
-🏁 [Une phrase de conclusion drôle, piquante et cynique style L'Opposant Féroce — comme si c'était lui qui concluait le débat avec un commentaire cinglant sur la qualité des arguments]
-
-Sois concis, factuel sur les lois, et garde le ton sarcastique uniquement pour la conclusion finale.`
+Format JSON STRICT à respecter :
+{
+  "laws": [
+    {
+      "label": "LOI A",
+      "text": "<texte exact de la loi>",
+      "viable": <true si score global >= 50, false sinon>,
+      "reason": "<1 phrase factuelle expliquant pourquoi viable ou pas, basée sur le débat>",
+      "scores": { "economy": <valeur fournie>, "social": <valeur fournie>, "ecology": <valeur fournie>, "faisabilite": <valeur fournie> }
+    }
+  ],
+  "keyPoint": "<La question centrale non résolue du débat, en 1 phrase>",
+  "conclusion": "<1 phrase drôle, cynique et piquante style L'Opposant Féroce pour clore le débat>"
+}`
 
       const summaryResp = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
+        max_tokens: 600,
         system: summarySystem,
-        messages: formattedMessages,
+        messages: [{ role: 'user', content: `Voici le débat à analyser :\n\n${convoText}` }],
       })
-      return NextResponse.json({ summary: summaryResp.content[0].text }, { headers: corsHeaders })
+
+      const rawText = summaryResp.content[0].text
+      // Try to parse JSON, fallback to raw text
+      let summaryData
+      try {
+        const match = rawText.match(/\{[\s\S]*\}/)
+        summaryData = match ? JSON.parse(match[0]) : null
+      } catch { summaryData = null }
+
+      return NextResponse.json({
+        summary: summaryData ? JSON.stringify(summaryData) : rawText,
+        parsed: !!summaryData
+      }, { headers: corsHeaders })
     }
 
     // --- CHAT MODE ---
@@ -544,6 +568,7 @@ SCORES ACTUELS:
 - Économie: ${currentScores?.economy || 50}/100
 - Social: ${currentScores?.social || 50}/100
 - Écologie: ${currentScores?.ecology || 50}/100
+- Faisabilité: ${currentScores?.faisabilite || 50}/100
 - Score Global: ${currentScores?.overall || 50}/100
 
 Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
