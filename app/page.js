@@ -985,6 +985,7 @@ function ButterflyApp() {
         {showSidebar && (
           <motion.div className="fixed top-0 right-0 h-full w-80 bg-card border-l border-white/10 z-40 p-4 overflow-y-auto" initial={{ x: 320 }} animate={{ x: 0 }} exit={{ x: 320 }} transition={{ type: "spring", damping: 20 }}>
             <div className="pt-16">
+              <button onClick={() => setShowSidebar(false)} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><X className="w-4 h-4" /></button>
               <Tabs value={sidebarTab} onValueChange={setSidebarTab}>
                 <TabsList className="w-full mb-4"><TabsTrigger value="history" className="flex-1"><History className="w-4 h-4 mr-1" />Historique</TabsTrigger><TabsTrigger value="leaderboard" className="flex-1"><Award className="w-4 h-4 mr-1" />Top</TabsTrigger></TabsList>
                 <TabsContent value="history"><HistoryPanel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
