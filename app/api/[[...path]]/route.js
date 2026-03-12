@@ -351,6 +351,10 @@ export async function POST(request, { params }) {
     if (endpoint === 'stripe/create-checkout') {
       return handleCreateCheckout(request)
     }
+
+    if (endpoint === 'stripe/cancel-subscription') {
+      return handleCancelSubscription(request)
+    }
     
     if (endpoint === 'stripe/webhook') {
       return handleStripeWebhook(request)
@@ -695,16 +699,17 @@ async function handleGetHistory(request) {
   }
   
   const user = await getUser(request)
-  
-  let query = supabase
+
+  if (!user) {
+    return NextResponse.json({ history: [] }, { headers: corsHeaders })
+  }
+
+  const query = supabase
     .from('laws_history')
     .select('*')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
-  
-  if (user) {
-    query = query.eq('user_id', user.id)
-  }
   
   const { data: history, error } = await query
   
@@ -723,19 +728,29 @@ async function handleGetLeaderboard(request) {
     return NextResponse.json({ leaderboard: { economy: [], social: [], ecology: [], overall: [] } }, { headers: corsHeaders })
   }
   
-  const [topEconomy, topSocial, topEcology, topOverall] = await Promise.all([
+  const [topEconomy, topSocial, topEcology, topOverall, flopEconomy, flopSocial, flopEcology, flopOverall] = await Promise.all([
     supabase.from('laws_history').select('law_text, score_economy').order('score_economy', { ascending: false }).limit(5),
     supabase.from('laws_history').select('law_text, score_social').order('score_social', { ascending: false }).limit(5),
     supabase.from('laws_history').select('law_text, score_ecology').order('score_ecology', { ascending: false }).limit(5),
-    supabase.from('laws_history').select('law_text, score_overall').order('score_overall', { ascending: false }).limit(5)
+    supabase.from('laws_history').select('law_text, score_overall').order('score_overall', { ascending: false }).limit(5),
+    supabase.from('laws_history').select('law_text, score_economy').order('score_economy', { ascending: true }).limit(5),
+    supabase.from('laws_history').select('law_text, score_social').order('score_social', { ascending: true }).limit(5),
+    supabase.from('laws_history').select('law_text, score_ecology').order('score_ecology', { ascending: true }).limit(5),
+    supabase.from('laws_history').select('law_text, score_overall').order('score_overall', { ascending: true }).limit(5)
   ])
-  
+
   return NextResponse.json({
     leaderboard: {
       economy: (topEconomy.data || []).map(h => ({ law: h.law_text, score: h.score_economy })),
       social: (topSocial.data || []).map(h => ({ law: h.law_text, score: h.score_social })),
       ecology: (topEcology.data || []).map(h => ({ law: h.law_text, score: h.score_ecology })),
       overall: (topOverall.data || []).map(h => ({ law: h.law_text, score: h.score_overall }))
+    },
+    flop: {
+      economy: (flopEconomy.data || []).map(h => ({ law: h.law_text, score: h.score_economy })),
+      social: (flopSocial.data || []).map(h => ({ law: h.law_text, score: h.score_social })),
+      ecology: (flopEcology.data || []).map(h => ({ law: h.law_text, score: h.score_ecology })),
+      overall: (flopOverall.data || []).map(h => ({ law: h.law_text, score: h.score_overall }))
     }
   }, { headers: corsHeaders })
 }
@@ -815,6 +830,33 @@ async function handleCreateCheckout(request) {
   })
   
   return NextResponse.json({ url: session.url }, { headers: corsHeaders })
+}
+
+// Stripe: Cancel subscription
+async function handleCancelSubscription(request) {
+  const user = await getUser(request)
+  if (!user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders })
+  }
+
+  const supabase = createServiceClient()
+  if (!supabase) {
+    return NextResponse.json({ error: 'Service non disponible' }, { status: 500, headers: corsHeaders })
+  }
+
+  const { data: profile } = await supabase.from('profiles').select('stripe_subscription_id').eq('id', user.id).single()
+
+  if (!profile?.stripe_subscription_id) {
+    return NextResponse.json({ error: 'Aucun abonnement actif' }, { status: 400, headers: corsHeaders })
+  }
+
+  try {
+    await stripe.subscriptions.cancel(profile.stripe_subscription_id)
+    return NextResponse.json({ success: true }, { headers: corsHeaders })
+  } catch (err) {
+    console.error('Cancel subscription error:', err)
+    return NextResponse.json({ error: 'Erreur lors de la résiliation' }, { status: 500, headers: corsHeaders })
+  }
 }
 
 // Stripe: Customer portal

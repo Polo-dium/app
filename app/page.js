@@ -229,8 +229,33 @@ function PremiumBadge() {
 
 // User Menu
 function UserMenu() {
-  const { user, profile, signOut, isPremium } = useAuth()
+  const { user, profile, signOut, isPremium, getAccessToken } = useAuth()
   const [open, setOpen] = useState(false)
+  const [canceling, setCanceling] = useState(false)
+
+  const handleUnsubscribe = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir résilier votre abonnement Premium ?')) return
+    setCanceling(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/stripe/cancel-subscription', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        alert('Abonnement résilié. Votre accès Premium reste actif jusqu\'à la fin de la période.')
+        setOpen(false)
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Erreur lors de la résiliation')
+      }
+    } catch {
+      alert('Erreur réseau')
+    } finally {
+      setCanceling(false)
+    }
+  }
+
   if (!user) return null
   return (
     <div className="relative">
@@ -241,7 +266,14 @@ function UserMenu() {
       {open && (
         <motion.div className="absolute right-0 top-12 w-64 bg-card rounded-lg border border-white/10 shadow-xl overflow-hidden z-50" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="p-4 border-b border-white/10"><p className="font-medium truncate">{user.email}</p><p className="text-sm text-muted-foreground">{isPremium ? 'Citoyen Premium' : 'Compte gratuit'}</p></div>
-          <div className="p-2"><button onClick={signOut} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm"><LogOut className="w-4 h-4" />Déconnexion</button></div>
+          <div className="p-2">
+            {isPremium && (
+              <button onClick={handleUnsubscribe} disabled={canceling} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-500/10 text-left text-sm text-red-400 disabled:opacity-50">
+                <X className="w-4 h-4" />{canceling ? 'Résiliation...' : 'Se désabonner'}
+              </button>
+            )}
+            <button onClick={signOut} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm"><LogOut className="w-4 h-4" />Déconnexion</button>
+          </div>
         </motion.div>
       )}
     </div>
@@ -824,25 +856,40 @@ function HistoryPanel({ onSelectLaw }) {
 // Leaderboard Panel
 function LeaderboardPanel({ onSelectLaw }) {
   const [leaderboard, setLeaderboard] = useState(null)
+  const [flop, setFlop] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('overall')
-  useEffect(() => { fetch('/api/leaderboard').then(r => r.json()).then(data => { setLeaderboard(data.leaderboard); setLoading(false) }).catch(() => setLoading(false)) }, [])
+  useEffect(() => { fetch('/api/leaderboard').then(r => r.json()).then(data => { setLeaderboard(data.leaderboard); setFlop(data.flop); setLoading(false) }).catch(() => setLoading(false)) }, [])
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-yellow-400" /></div>
   if (!leaderboard || Object.values(leaderboard).every(arr => arr.length === 0)) return <div className="text-center py-8 text-muted-foreground"><Award className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Pas encore de classement</p></div>
   const categories = [{ key: 'overall', label: '🏆 Global', color: 'text-yellow-400' }, { key: 'economy', label: '💰 Éco', color: 'text-blue-400' }, { key: 'social', label: '❤️ Social', color: 'text-pink-400' }, { key: 'ecology', label: '🌿 Écolo', color: 'text-green-400' }]
+  const flopItems = flop?.[activeCategory] || []
   return (
     <div className="space-y-4">
       {onSelectLaw && <p className="text-xs text-muted-foreground text-center">Cliquez sur une loi pour la tester</p>}
       <div className="flex gap-2 flex-wrap">{categories.map(cat => (<button key={cat.key} onClick={() => setActiveCategory(cat.key)} className={`px-3 py-1 rounded-full text-xs transition-colors ${activeCategory === cat.key ? 'bg-white/20 text-white' : 'bg-black/30 text-muted-foreground hover:bg-white/10'}`}>{cat.label}</button>))}</div>
-      <div className="space-y-2">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 mb-2"><Trophy className="w-4 h-4 text-yellow-400" /><span className="text-xs font-semibold text-yellow-400 uppercase">Top</span></div>
         {(leaderboard[activeCategory] || []).map((item, i) => (
-          <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-yellow-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
+          <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-yellow-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'}`}>{i + 1}</div>
             <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
             <span className={`font-bold ${categories.find(c => c.key === activeCategory)?.color}`}>{item.score}</span>
           </motion.div>
         ))}
       </div>
+      {flopItems.length > 0 && (
+        <div className="space-y-1 pt-2 border-t border-white/10">
+          <div className="flex items-center gap-2 mb-2"><Skull className="w-4 h-4 text-red-400" /><span className="text-xs font-semibold text-red-400 uppercase">Flop</span></div>
+          {flopItems.map((item, i) => (
+            <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-red-900/30 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-red-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-red-900/50 text-red-300">{i + 1}</div>
+              <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
+              <span className="font-bold text-red-400">{item.score}</span>
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
