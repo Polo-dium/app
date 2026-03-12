@@ -272,6 +272,9 @@ function UserMenu() {
                 <X className="w-4 h-4" />{canceling ? 'Résiliation...' : 'Se désabonner'}
               </button>
             )}
+            <a href={`mailto:boutarin.paul@gmail.com?subject=Support Butterfly.gov&body=Bonjour,%0A%0AMon compte : ${user.email}%0A%0A`} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm text-muted-foreground hover:text-white transition-colors">
+              <Mail className="w-4 h-4" />Support
+            </a>
             <button onClick={signOut} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm"><LogOut className="w-4 h-4" />Déconnexion</button>
           </div>
         </motion.div>
