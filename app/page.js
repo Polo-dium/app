@@ -1164,7 +1164,15 @@ function ButterflyApp() {
         </AnimatePresence>
       </div>
       
-      <footer className="relative z-10 text-center py-4 text-xs text-muted-foreground">Propulsé par l'IA Claude • Les résultats sont fictifs et à but éducatif</footer>
+      <footer className="relative z-10 text-center py-4 text-xs text-muted-foreground space-y-2">
+        <p>Propulsé par l'IA Claude • Les résultats sont fictifs et à but éducatif</p>
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <a href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</a>
+          <a href="/confidentialite" className="hover:text-white transition-colors">Confidentialité</a>
+          <a href="/cgu" className="hover:text-white transition-colors">CGU / CGV</a>
+          <button onClick={() => window.dispatchEvent(new Event('showCookieConsent'))} className="hover:text-white transition-colors">Gérer les cookies</button>
+        </div>
+      </footer>
     </main>
   )
 }

@@ -1,4 +1,5 @@
 import './globals.css'
+import CookieConsent from '@/components/CookieConsent'
 
 export const metadata = {
   title: 'Butterfly.gov - Simulateur de Lois',
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
     <html lang="fr" className="dark">
       <body className="min-h-screen bg-background antialiased">
         {children}
+        <CookieConsent />
       </body>
     </html>
   )
