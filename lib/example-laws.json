@@ -1,0 +1,214 @@
+{
+  "laws": [
+    {
+      "id": "g1",
+      "category": "gauche",
+      "title": "Semaine de 4 jours obligatoire",
+      "description": "Instaurer la semaine de travail de 4 jours (32h) sans réduction de salaire pour toutes les entreprises de plus de 50 salariés.",
+      "tags": ["travail", "social"]
+    },
+    {
+      "id": "g2",
+      "category": "gauche",
+      "title": "Revenu universel de 800€",
+      "description": "Créer un revenu universel inconditionnel de 800€ par mois pour tout résident français majeur, financé par une refonte de la fiscalité.",
+      "tags": ["social", "économie"]
+    },
+    {
+      "id": "g3",
+      "category": "gauche",
+      "title": "Gratuité des transports en commun",
+      "description": "Rendre gratuits tous les transports en commun urbains et interurbains sur le territoire national, financés par une taxe sur les autoroutes.",
+      "tags": ["écologie", "social"]
+    },
+    {
+      "id": "g4",
+      "category": "gauche",
+      "title": "Encadrement des loyers national",
+      "description": "Étendre l'encadrement des loyers à toutes les communes de plus de 10 000 habitants avec gel des loyers pendant 3 ans.",
+      "tags": ["logement", "social"]
+    },
+    {
+      "id": "g5",
+      "category": "gauche",
+      "title": "Taxe sur les superprofits",
+      "description": "Instaurer une taxe de 25% sur les superprofits des entreprises du CAC 40 dépassant 1 milliard d'euros de bénéfices annuels.",
+      "tags": ["économie", "fiscalité"]
+    },
+    {
+      "id": "g6",
+      "category": "gauche",
+      "title": "Repas bio et locaux à la cantine",
+      "description": "Imposer 100% de produits bio et locaux dans toutes les cantines scolaires d'ici 2028, avec subvention de l'État pour les communes.",
+      "tags": ["écologie", "éducation"]
+    },
+    {
+      "id": "g7",
+      "category": "gauche",
+      "title": "Interdiction des licenciements boursiers",
+      "description": "Interdire les plans de licenciement dans les entreprises ayant versé des dividendes supérieurs à 5% de leur chiffre d'affaires l'année précédente.",
+      "tags": ["travail", "économie"]
+    },
+    {
+      "id": "g8",
+      "category": "gauche",
+      "title": "Nationalisation des autoroutes",
+      "description": "Renationaliser les concessions autoroutières à leur échéance et baisser les péages de 30% sur l'ensemble du réseau.",
+      "tags": ["économie", "transport"]
+    },
+    {
+      "id": "g9",
+      "category": "gauche",
+      "title": "Congé parental de 18 mois",
+      "description": "Étendre le congé parental à 18 mois rémunérés à 80% du salaire, partagés obligatoirement entre les deux parents.",
+      "tags": ["social", "famille"]
+    },
+    {
+      "id": "g10",
+      "category": "gauche",
+      "title": "Salaire maximum à 20 SMIC",
+      "description": "Plafonner les rémunérations dans toute entreprise à un ratio de 1 à 20 entre le salaire le plus bas et le plus haut.",
+      "tags": ["économie", "social"]
+    },
+    {
+      "id": "d1",
+      "category": "droite",
+      "title": "Flat tax à 15% pour les créateurs d'entreprise",
+      "description": "Instaurer un taux unique d'imposition de 15% pendant 5 ans pour tout créateur d'entreprise employant au moins 3 personnes.",
+      "tags": ["économie", "entrepreneuriat"]
+    },
+    {
+      "id": "d2",
+      "category": "droite",
+      "title": "Suppression de 200 000 postes de fonctionnaires",
+      "description": "Réduire la fonction publique de 200 000 postes en 5 ans par non-remplacement des départs en retraite, hors régalien.",
+      "tags": ["économie", "administration"]
+    },
+    {
+      "id": "d3",
+      "category": "droite",
+      "title": "Peine plancher pour récidive",
+      "description": "Rétablir les peines plancher pour tout délit commis en récidive, avec interdiction d'aménagement pour la troisième condamnation.",
+      "tags": ["justice", "sécurité"]
+    },
+    {
+      "id": "d4",
+      "category": "droite",
+      "title": "Zéro charge pour les TPE",
+      "description": "Exonérer totalement de charges patronales les entreprises de moins de 5 salariés pendant leurs 3 premières années d'existence.",
+      "tags": ["économie", "entrepreneuriat"]
+    },
+    {
+      "id": "d5",
+      "category": "droite",
+      "title": "Service national universel obligatoire",
+      "description": "Rendre le Service National Universel obligatoire pendant 6 mois pour tous les jeunes de 18 ans, incluant une formation civique et militaire.",
+      "tags": ["défense", "jeunesse"]
+    },
+    {
+      "id": "d6",
+      "category": "droite",
+      "title": "Fin du regroupement familial automatique",
+      "description": "Conditionner le regroupement familial à un emploi stable depuis 3 ans, un logement adapté et la réussite d'un test de français B1.",
+      "tags": ["immigration", "intégration"]
+    },
+    {
+      "id": "d7",
+      "category": "droite",
+      "title": "Privatisation de l'audiovisuel public",
+      "description": "Privatiser France Télévisions et Radio France en conservant Arte comme seule chaîne publique, pour économiser 3 milliards par an.",
+      "tags": ["économie", "médias"]
+    },
+    {
+      "id": "d8",
+      "category": "droite",
+      "title": "Dégressivité des allocations chômage",
+      "description": "Rendre les allocations chômage dégressives de 10% tous les 3 mois à partir du 7ème mois d'indemnisation.",
+      "tags": ["emploi", "économie"]
+    },
+    {
+      "id": "d9",
+      "category": "droite",
+      "title": "Suppression de l'ISF résidence principale",
+      "description": "Exclure totalement la résidence principale de l'assiette de l'IFI et baisser le seuil d'imposition à 2 millions d'euros.",
+      "tags": ["fiscalité", "logement"]
+    },
+    {
+      "id": "d10",
+      "category": "droite",
+      "title": "Simplification administrative radicale",
+      "description": "Supprimer 50% des normes applicables aux PME et créer un guichet unique numérique pour toutes les démarches d'entreprise.",
+      "tags": ["économie", "administration"]
+    },
+    {
+      "id": "f1",
+      "category": "fun",
+      "title": "Droit à la sieste au travail",
+      "description": "Instaurer un droit légal à 20 minutes de sieste quotidienne sur le lieu de travail, avec obligation pour l'employeur de fournir un espace dédié.",
+      "tags": ["travail", "bien-être"]
+    },
+    {
+      "id": "f2",
+      "category": "fun",
+      "title": "Interdiction des réunions après 16h",
+      "description": "Interdire toute réunion professionnelle après 16h et limiter leur durée à 30 minutes maximum, sous peine d'amende pour l'organisateur.",
+      "tags": ["travail", "productivité"]
+    },
+    {
+      "id": "f3",
+      "category": "fun",
+      "title": "Vote obligatoire avec option 'Aucun candidat'",
+      "description": "Rendre le vote obligatoire à toutes les élections avec une option 'Aucun candidat'. Si cette option l'emporte, l'élection est annulée et les candidats sont remplacés.",
+      "tags": ["démocratie", "politique"]
+    },
+    {
+      "id": "f4",
+      "category": "fun",
+      "title": "Journée nationale sans écran",
+      "description": "Instaurer un dimanche par mois sans écran numérique dans l'espace public : coupure du Wi-Fi public, fermeture des réseaux sociaux français.",
+      "tags": ["numérique", "société"]
+    },
+    {
+      "id": "f5",
+      "category": "fun",
+      "title": "Permis à points pour les politiques",
+      "description": "Créer un permis à points pour les élus : chaque promesse non tenue retire des points. À zéro, l'élu est démis et inéligible 5 ans.",
+      "tags": ["démocratie", "politique"]
+    },
+    {
+      "id": "f6",
+      "category": "fun",
+      "title": "Taxe sur le bullshit corporate",
+      "description": "Taxer les entreprises utilisant plus de 15 anglicismes par page dans leurs communications officielles. Recettes affectées à la promotion du français.",
+      "tags": ["langue", "culture"]
+    },
+    {
+      "id": "f7",
+      "category": "fun",
+      "title": "Salaire des ministres indexé sur le SMIC",
+      "description": "Indexer la rémunération de tous les ministres et parlementaires sur 3x le SMIC. Toute augmentation du SMIC augmente leur salaire, et inversement.",
+      "tags": ["politique", "économie"]
+    },
+    {
+      "id": "f8",
+      "category": "fun",
+      "title": "Limitation de vitesse des SUV en ville",
+      "description": "Limiter les véhicules de plus de 1,8 tonne à 20 km/h en centre-ville et leur interdire les places de parking standard.",
+      "tags": ["écologie", "urbanisme"]
+    },
+    {
+      "id": "f9",
+      "category": "fun",
+      "title": "Droit au télétravail pour les animaux",
+      "description": "Obliger toute entreprise autorisant le télétravail à accepter la présence d'animaux domestiques au bureau pour les jours en présentiel.",
+      "tags": ["travail", "animaux"]
+    },
+    {
+      "id": "f10",
+      "category": "fun",
+      "title": "Casier judiciaire vierge obligatoire pour les élus",
+      "description": "Interdire toute candidature à une élection publique pour toute personne ayant été condamnée, même avec sursis, pour un délit financier.",
+      "tags": ["démocratie", "justice"]
+    }
+  ]
+}

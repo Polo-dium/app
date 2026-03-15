@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import html2canvas from 'html2canvas'
 import confetti from 'canvas-confetti'
 import { createClient } from '@/lib/supabase/client'
+import { getDailyLaws } from '@/lib/daily-laws'
 
 // Auth Context
 const AuthContext = createContext(null)
@@ -827,6 +828,36 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
   )
 }
 
+// Daily Law Card
+const categoryConfig = {
+  gauche: { dot: 'bg-rose-500', border: 'border-rose-500/20', hover: 'hover:border-rose-500/40' },
+  droite: { dot: 'bg-blue-500', border: 'border-blue-500/20', hover: 'hover:border-blue-500/40' },
+  fun: { dot: 'bg-yellow-400', border: 'border-yellow-400/20', hover: 'hover:border-yellow-400/40' },
+}
+
+function DailyLawCard({ law, onClick }) {
+  const cfg = categoryConfig[law.category]
+  return (
+    <motion.button
+      onClick={() => onClick(law.description)}
+      className={`text-left p-3 rounded-xl bg-white/5 border ${cfg.border} ${cfg.hover} transition-colors w-full`}
+      whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="flex items-start gap-2 mb-1">
+        <span className={`mt-1.5 shrink-0 w-2 h-2 rounded-full ${cfg.dot}`} />
+        <span className="font-semibold text-sm text-white leading-tight">{law.title}</span>
+      </div>
+      <p className="text-xs text-muted-foreground line-clamp-2 pl-4">{law.description}</p>
+      <div className="flex flex-wrap gap-1 mt-2 pl-4">
+        {law.tags.map(tag => (
+          <span key={tag} className="text-xs px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10">{tag}</span>
+        ))}
+      </div>
+    </motion.button>
+  )
+}
+
 // History Panel
 function HistoryPanel({ onSelectLaw }) {
   const { getAccessToken } = useAuth()
@@ -1044,11 +1075,11 @@ function ButterflyApp() {
               {error && <motion.p className="text-center text-red-400" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{error}</motion.p>}
               
               {mode === 'single' && (
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-muted-foreground">Exemples de lois à tester :</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {['Semaine de 4 jours obligatoire', 'Revenu universel de 1000€', 'Interdire les jets privés'].map((example) => (
-                      <button key={example} onClick={() => setLawText(example)} className="text-xs px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">{example}</button>
+                <div className="space-y-3">
+                  <p className="text-sm text-center text-muted-foreground">Propositions du jour</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {getDailyLaws().map((law) => (
+                      <DailyLawCard key={law.id} law={law} onClick={(text) => setLawText(text)} />
                     ))}
                   </div>
                 </div>
