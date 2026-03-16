@@ -277,9 +277,25 @@ export default function LawExplorer() {
 
   const fs = {
     tiny:   Math.max(9,  Math.min(12, dim.w / 120)),
-    small:  Math.max(11, Math.min(14.5, dim.w / 95)),
-    medium: Math.max(12, Math.min(17, dim.w / 80)),
-    center: Math.max(13, Math.min(18, dim.w / 80)),
+    small:  Math.max(13, Math.min(17, dim.w / 78)),
+    medium: Math.max(14, Math.min(19, dim.w / 72)),
+    center: Math.max(15, Math.min(21, dim.w / 68)),
+  };
+
+  // ── Découpe un titre long en max 2 lignes SVG ────────
+  const splitTitle = (title = '', maxPerLine = 14) => {
+    if (!title || title.length <= maxPerLine) return [title || '', null];
+    const words = title.split(' ');
+    if (words.length === 1) return [title.slice(0, maxPerLine) + '…', null];
+    let l1 = '', i = 0;
+    while (i < words.length) {
+      const test = l1 ? l1 + ' ' + words[i] : words[i];
+      if (test.length > maxPerLine && l1) break;
+      l1 = test; i++;
+    }
+    let l2 = words.slice(i).join(' ');
+    if (l2.length > maxPerLine + 3) l2 = l2.slice(0, maxPerLine + 2) + '…';
+    return [l1, l2 || null];
   };
 
   const sectorColor = (key) => SECTORS[key]?.color || '#888';
@@ -335,82 +351,113 @@ export default function LawExplorer() {
           )}
         </div>
 
-        {/* Visual depth slider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14, flexShrink: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              {[1, 2, 3].map((v, i) => {
-                const active = depth >= v;
-                const btnSize = isMobile ? 28 : 34;
-                const svgSize = isMobile ? 18 : 22;
-                return (
-                  <span key={v} style={{ display: 'flex', alignItems: 'center' }}>
-                    {i > 0 && (
-                      <div style={{
-                        width: isMobile ? 14 : 20, height: 2,
-                        background: depth >= v ? centerSector : '#252530',
-                        transition: 'background 0.3s ease', borderRadius: 1,
-                      }} />
-                    )}
-                    <button
-                      className="depth-btn"
-                      onClick={() => { setDepth(v); setPanelNode(null); setPanelLocked(false); }}
-                      title={RING_LABELS[v - 1]}
-                      style={{
-                        width: btnSize, height: btnSize, borderRadius: '50%',
-                        border: 'none', cursor: 'pointer', padding: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: active ? `${centerSector}18` : '#0E0E18',
-                        outline: `1.5px solid ${active ? centerSector + '55' : '#282832'}`,
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      <svg width={svgSize} height={svgSize} viewBox="0 0 22 22">
-                        <circle cx={11} cy={11} r={1.5} fill={active ? centerSector : '#555'} />
-                        <circle cx={11} cy={11} r={5} fill="none"
-                          stroke={active ? centerSector : '#444'} strokeWidth={1.2} opacity={active ? 0.75 : 0.3} />
-                        {v >= 2 && <circle cx={11} cy={11} r={8} fill="none"
-                          stroke={depth >= 2 ? centerSector : '#333'} strokeWidth={0.9} opacity={depth >= 2 ? 0.55 : 0.2} />}
-                        {v >= 3 && <circle cx={11} cy={11} r={10.5} fill="none"
-                          stroke={depth >= 3 ? centerSector : '#282832'} strokeWidth={0.7} opacity={depth >= 3 ? 0.4 : 0.15} />}
-                      </svg>
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-            <span style={{ fontSize: isMobile ? 7 : 8, color: '#555', fontFamily: 'monospace', letterSpacing: 0.3, maxWidth: 130, textAlign: 'center' }}>
-              {RING_LABELS[depth - 1]}
-            </span>
-          </div>
-
-          <a href="/explorer" style={{
-            fontSize: 10, color: '#666', textDecoration: 'none', fontFamily: 'monospace',
-            padding: '5px 10px', borderRadius: 6, border: '1px solid #1E1E28', whiteSpace: 'nowrap',
-          }}>
-            Changer ↩
-          </a>
-        </div>
+        <a href="/explorer" style={{
+          fontSize: 10, color: '#666', textDecoration: 'none', fontFamily: 'monospace',
+          padding: '5px 10px', borderRadius: 6, border: '1px solid #1E1E28', whiteSpace: 'nowrap', flexShrink: 0,
+        }}>
+          Changer ↩
+        </a>
       </div>
 
-      {/* ── Sector legend ─────────────────────────────── */}
+      {/* ── Titre loi + légende + slider profondeur ────── */}
       <div style={{
-        display: 'flex', justifyContent: 'center', gap: isMobile ? 8 : 18, flexWrap: 'wrap',
-        padding: isMobile ? '0 10px 5px' : '0 20px 8px', flexShrink: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 5 : 7,
+        padding: isMobile ? '0 12px 5px' : '0 20px 7px', flexShrink: 0,
         opacity: entered ? 1 : 0, transition: 'opacity 0.5s 0.2s',
       }}>
-        {Object.entries(SECTORS).map(([k, s]) => (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{
-              width: isMobile ? 7 : 9, height: isMobile ? 7 : 9,
-              borderRadius: '50%', background: s.color,
-              boxShadow: `0 0 7px ${s.color}70`, flexShrink: 0,
-            }} />
-            <span style={{ fontSize: isMobile ? 9 : fs.tiny + 0.5, color: '#888', fontFamily: 'monospace', letterSpacing: 0.3 }}>
-              {s.label}
+        {/* Titre de la loi explorée */}
+        <p style={{
+          margin: 0, textAlign: 'center',
+          fontSize: isMobile ? 13 : 17, fontWeight: 700, color: '#E8E6E1',
+          lineHeight: 1.35, maxWidth: 680,
+          overflow: 'hidden', display: '-webkit-box',
+          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        }}>
+          {lawQuery}
+        </p>
+
+        {/* Légende des secteurs */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: isMobile ? 8 : 18, flexWrap: 'wrap' }}>
+          {Object.entries(SECTORS).map(([k, s]) => (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{
+                width: isMobile ? 7 : 9, height: isMobile ? 7 : 9,
+                borderRadius: '50%', background: s.color,
+                boxShadow: `0 0 7px ${s.color}70`, flexShrink: 0,
+              }} />
+              <span style={{ fontSize: isMobile ? 9 : fs.tiny + 0.5, color: '#888', fontFamily: 'monospace', letterSpacing: 0.3 }}>
+                {s.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Slider profondeur — sous la légende */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span style={{ fontSize: isMobile ? 7 : 9, color: '#555', fontFamily: 'monospace', letterSpacing: 0.8, marginRight: 8, textTransform: 'uppercase' }}>
+              Profondeur
             </span>
+            {[1, 2, 3].map((v, i) => {
+              const active = depth >= v;
+              const btnSize = isMobile ? 26 : 30;
+              const svgSize = isMobile ? 16 : 20;
+              return (
+                <span key={v} style={{ display: 'flex', alignItems: 'center' }}>
+                  {i > 0 && (
+                    <div style={{
+                      width: isMobile ? 12 : 18, height: 2,
+                      background: depth >= v ? centerSector : '#252530',
+                      transition: 'background 0.3s ease', borderRadius: 1,
+                    }} />
+                  )}
+                  <button
+                    className="depth-btn"
+                    onClick={() => { setDepth(v); setPanelNode(null); setPanelLocked(false); }}
+                    title={RING_LABELS[v - 1]}
+                    style={{
+                      width: btnSize, height: btnSize, borderRadius: '50%',
+                      border: 'none', cursor: 'pointer', padding: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: active ? `${centerSector}18` : '#0E0E18',
+                      outline: `1.5px solid ${active ? centerSector + '55' : '#282832'}`,
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <svg width={svgSize} height={svgSize} viewBox="0 0 22 22">
+                      <circle cx={11} cy={11} r={1.5} fill={active ? centerSector : '#555'} />
+                      <circle cx={11} cy={11} r={5} fill="none"
+                        stroke={active ? centerSector : '#444'} strokeWidth={1.2} opacity={active ? 0.75 : 0.3} />
+                      {v >= 2 && <circle cx={11} cy={11} r={8} fill="none"
+                        stroke={depth >= 2 ? centerSector : '#333'} strokeWidth={0.9} opacity={depth >= 2 ? 0.55 : 0.2} />}
+                      {v >= 3 && <circle cx={11} cy={11} r={10.5} fill="none"
+                        stroke={depth >= 3 ? centerSector : '#282832'} strokeWidth={0.7} opacity={depth >= 3 ? 0.4 : 0.15} />}
+                    </svg>
+                  </button>
+                </span>
+              );
+            })}
           </div>
-        ))}
+          {/* Labels cliquables avec explication des niveaux */}
+          <div style={{ display: 'flex', gap: isMobile ? 10 : 16, justifyContent: 'center' }}>
+            {RING_LABELS.map((label, i) => (
+              <span
+                key={i}
+                onClick={() => { setDepth(i + 1); setPanelNode(null); setPanelLocked(false); }}
+                style={{
+                  fontSize: isMobile ? 7 : 8.5, cursor: 'pointer',
+                  color: depth === i + 1 ? centerSector : '#555',
+                  fontFamily: 'monospace', letterSpacing: 0.2,
+                  transition: 'color 0.3s',
+                  borderBottom: depth === i + 1 ? `1px solid ${centerSector}60` : '1px solid transparent',
+                  paddingBottom: 1,
+                }}
+              >
+                {i + 1}. {label}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── SVG Map ─────────────────────────────────────── */}
@@ -513,10 +560,14 @@ export default function LawExplorer() {
             const r = nodeR(n.ring);
             const active = hoveredId === n.id || panelNode?.id === n.id;
             const locked = panelLocked && panelNode?.id === n.id;
-            const showLabel = active || n.ring === 0;
-            const shortTitle = n.title?.length > 24 ? n.title.slice(0, 22) + '…' : n.title;
-            // Position du label relative au nœud (centre = 0,0)
-            const labelOffsetY = n.y > cy ? r + fs.small + 5 : -(r + 7);
+            // Labels : uniquement l'anneau le plus externe du niveau actuel + nœuds actifs
+            const showLabel = active || n.ring === depth - 1;
+            const [l1, l2] = splitTitle(n.title);
+            const lineH = fs.small + 3;
+            // Position du label relative au nœud — ajuste pour 2 lignes au-dessus
+            const labelOffsetY = n.y > cy
+              ? r + fs.small + 4
+              : -(r + 7 + (l2 ? lineH : 0));
 
             return (
               <g
@@ -554,7 +605,7 @@ export default function LawExplorer() {
                   opacity={active ? 1 : 0.65}
                   style={{ transition: 'opacity 0.2s' }} />
 
-                {/* ── Label SANS fond opaque — filtre halo transparent ── */}
+                {/* ── Label 2 lignes max — halo transparent ─────── */}
                 {showLabel && (
                   <text
                     x={0}
@@ -563,11 +614,12 @@ export default function LawExplorer() {
                     fill={active ? '#FFFFFF' : '#CCCCCC'}
                     fontSize={fs.small}
                     fontFamily="system-ui, sans-serif"
-                    fontWeight={active ? 700 : 400}
+                    fontWeight={active ? 700 : 500}
                     filter="url(#lblHalo)"
                     style={{ pointerEvents: 'none', transition: 'fill 0.2s' }}
                   >
-                    {shortTitle}
+                    <tspan x={0}>{l1}</tspan>
+                    {l2 && <tspan x={0} dy={lineH}>{l2}</tspan>}
                   </text>
                 )}
               </g>
