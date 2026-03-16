@@ -74,9 +74,10 @@ export async function POST(request) {
 
       try {
         const anthropicStream = anthropic.messages.stream({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-sonnet-4-20250514',
           system: SYSTEM_PROMPT_EXPLICATION,
           max_tokens: 4096,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
           messages: [{ role: 'user', content: userPrompt }],
         })
 
@@ -86,13 +87,17 @@ export async function POST(request) {
           controller.enqueue(encoder.encode(`data: ${data}\n\n`))
         })
 
-        // Track source count from search results
-        anthropicStream.on('message', (msg) => {
-          const searchResults = msg.content?.filter(b => b.type === 'tool_result') || []
-          sourceCount = searchResults.length
+        // Notify frontend when a web search is triggered (tool_use block)
+        anthropicStream.on('contentBlock', (block) => {
+          if (block.type === 'tool_use' && block.name === 'web_search') {
+            const evt = JSON.stringify({ type: 'searching', query: block.input?.query || '' })
+            controller.enqueue(encoder.encode(`data: ${evt}\n\n`))
+          }
         })
 
-        await anthropicStream.finalMessage()
+        // Count web searches from the final message
+        const finalMsg = await anthropicStream.finalMessage()
+        sourceCount = finalMsg.content?.filter(b => b.type === 'tool_use' && b.name === 'web_search').length || 0
 
         // Send done event with metadata
         const done = JSON.stringify({ type: 'done', sourceCount, tier: userTier })

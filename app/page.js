@@ -948,6 +948,8 @@ function ButterflyApp() {
   const [explainText, setExplainText] = useState('')
   const [explainResult, setExplainResult] = useState('')
   const [explainLoading, setExplainLoading] = useState(false)
+  const [explainSourceCount, setExplainSourceCount] = useState(0)
+  const [explainSearching, setExplainSearching] = useState('')
   const [showSharePanel, setShowSharePanel] = useState(false)
   const [sharePanelData, setSharePanelData] = useState(null)
   const cardRef = useRef(null)
@@ -986,11 +988,11 @@ function ButterflyApp() {
   
   const analyzeExplain = async () => {
     if (!explainText.trim()) return
-    setExplainLoading(true); setExplainResult(''); setError(null)
+    setExplainLoading(true); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null)
     try {
       const token = await getAccessToken()
-      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-      const response = await fetch('/api/explain', { method: 'POST', headers, body: JSON.stringify({ query: explainText.trim() }) })
+      const hdrs = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      const response = await fetch('/api/explain', { method: 'POST', headers: hdrs, body: JSON.stringify({ query: explainText.trim() }) })
       if (!response.ok) throw new Error('Erreur lors de l\'explication')
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -1005,12 +1007,14 @@ function ButterflyApp() {
           if (!line.startsWith('data: ')) continue
           try {
             const evt = JSON.parse(line.slice(6))
-            if (evt.type === 'text') setExplainResult(prev => prev + evt.text)
+            if (evt.type === 'text') { setExplainResult(prev => prev + evt.text); setExplainSearching('') }
+            else if (evt.type === 'searching') setExplainSearching(evt.query)
+            else if (evt.type === 'done') setExplainSourceCount(evt.sourceCount || 0)
           } catch { /* ignore parse errors */ }
         }
       }
     } catch (err) { setError(err.message) }
-    finally { setExplainLoading(false) }
+    finally { setExplainLoading(false); setExplainSearching('') }
   }
 
   const openSharePanel = (data) => { setSharePanelData(data); setShowSharePanel(true) }
@@ -1023,7 +1027,7 @@ function ButterflyApp() {
     if (data.url) window.location.href = data.url
   }
   
-  const reset = () => { setLawText(''); setLaw1Text(''); setLaw2Text(''); setResult(null); setDebateResult(null); setExplainText(''); setExplainResult(''); setError(null); setRateLimitExceeded(null) }
+  const reset = () => { setLawText(''); setLaw1Text(''); setLaw2Text(''); setResult(null); setDebateResult(null); setExplainText(''); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null); setRateLimitExceeded(null) }
 
   const hasResults = mode === 'single' ? result : mode === 'debate' ? debateResult : explainResult
   
@@ -1212,10 +1216,20 @@ function ButterflyApp() {
                 </>
               ) : explainResult ? (
                 <motion.div key="explain-result" className="w-full max-w-3xl space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <div className="flex items-center gap-2 text-green-400">
-                    <BookOpen className="w-5 h-5" />
-                    <span className="text-sm font-semibold uppercase tracking-widest">Mode Explication</span>
-                    {explainLoading && <span className="text-xs text-muted-foreground animate-pulse ml-2">Analyse en cours…</span>}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <BookOpen className="w-5 h-5" />
+                      <span className="text-sm font-semibold uppercase tracking-widest">Mode Explication</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {explainSearching ? (
+                        <span className="animate-pulse text-blue-400">🔍 Recherche : {explainSearching.slice(0, 40)}{explainSearching.length > 40 ? '…' : ''}</span>
+                      ) : explainSourceCount > 0 ? (
+                        <span className="text-green-400/70">✓ {explainSourceCount} source{explainSourceCount > 1 ? 's' : ''} consultée{explainSourceCount > 1 ? 's' : ''}</span>
+                      ) : explainLoading ? (
+                        <span className="animate-pulse">Analyse en cours…</span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="bg-card rounded-xl border border-white/10 p-6 text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{explainResult}</div>
                   {!explainLoading && (
