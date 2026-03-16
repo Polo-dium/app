@@ -947,6 +947,7 @@ function ButterflyApp() {
   const [showDebateChat, setShowDebateChat] = useState(false)
   const [explainText, setExplainText] = useState('')
   const [explainResult, setExplainResult] = useState('')
+  const [exploreText, setExploreText] = useState('')
   const [explainLoading, setExplainLoading] = useState(false)
   const [explainSourceCount, setExplainSourceCount] = useState(0)
   const [explainSearching, setExplainSearching] = useState('')
@@ -1071,7 +1072,7 @@ function ButterflyApp() {
   
   const reset = () => { setLawText(''); setLaw1Text(''); setLaw2Text(''); setResult(null); setDebateResult(null); setExplainText(''); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null); setRateLimitExceeded(null) }
 
-  const hasResults = mode === 'single' ? result : mode === 'debate' ? debateResult : explainResult
+  const hasResults = mode === 'single' ? result : mode === 'debate' ? debateResult : mode === 'explain' ? explainResult : false
   
   if (authLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-400" /></div>
   
@@ -1131,7 +1132,7 @@ function ButterflyApp() {
                   <button onClick={() => setMode('single')} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Analyser</button>
                   <button onClick={() => setMode('debate')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'debate' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-white'}`}>{!isPremium && <Lock className="w-3 h-3" />}<Swords className="w-4 h-4" />Débat</button>
                   <button onClick={() => setMode('explain')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explain' ? 'bg-green-700 text-white' : 'text-muted-foreground hover:text-white'}`}><BookOpen className="w-4 h-4" />Expliquer</button>
-                  <a href="/explorer" className="px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 text-muted-foreground hover:text-white hover:bg-white/10"><Network className="w-4 h-4" />Explorer</a>
+                  <button onClick={() => setMode('explore')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explore' ? 'bg-violet-700 text-white' : 'text-muted-foreground hover:text-white'}`}><Network className="w-4 h-4" />Explorer</button>
                 </div>
               </div>
               
@@ -1159,7 +1160,7 @@ function ButterflyApp() {
                   </div>
                   <div className="flex justify-center"><Button onClick={analyzeDebate} disabled={loading || !law1Text.trim() || !law2Text.trim() || !isPremium} className="px-8 bg-gradient-to-r from-blue-600 via-purple-600 to-red-500 hover:from-blue-500 hover:via-purple-500 hover:to-red-400"><Swords className="w-5 h-5 mr-2" />Lancer le débat</Button></div>
                 </div>
-              ) : (
+              ) : mode === 'explain' ? (
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Quelle loi ou réforme voulez-vous comprendre ?</label>
                   <div className="relative">
@@ -1168,7 +1169,16 @@ function ButterflyApp() {
                   </div>
                   <p className="text-xs text-center text-muted-foreground">Explication factuelle, sans jugement de valeur · Sources primaires citées</p>
                 </div>
-              )}
+              ) : mode === 'explore' ? (
+                <div className="space-y-4">
+                  <label className="block text-center text-xl text-white/80">Quelle loi voulez-vous explorer en constellation ?</label>
+                  <div className="relative">
+                    <Input type="text" value={exploreText} onChange={(e) => setExploreText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} placeholder="Ex: Interdire les publicités alimentaires pour enfants..." className="h-16 text-lg pl-6 pr-16 rounded-full bg-card border-2 border-white/10 focus:border-violet-600 transition-all" />
+                    <Button onClick={() => { if (exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} disabled={exploreText.trim().length < 5} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-violet-700 hover:bg-violet-600"><Network className="w-5 h-5" /></Button>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground">Carte radiale d'implications · 3 anneaux de profondeur · Cliquez les nœuds pour naviguer</p>
+                </div>
+              ) : null}
               
               {error && <motion.p className="text-center text-red-400" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{error}</motion.p>}
               
