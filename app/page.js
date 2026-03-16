@@ -648,9 +648,9 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
               proposition: law,
               score_global: currentScores.overall,
               scores: currentScores,
-              gagnants: [],
-              perdants: [],
-              effet_papillon: summaryData.conclusion || summaryData.keyPoint || '',
+              gagnants: initialResult?.winners || '',
+              perdants: initialResult?.losers || '',
+              effet_papillon: summaryData.conclusion || summaryData.keyPoint || initialResult?.butterfly_effect || '',
             }
             const handleShare = onShare ? () => onShare(sharePayload) : null
             return summaryData.raw
