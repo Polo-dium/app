@@ -1,173 +1,274 @@
-'use client'
+// components/SharePanel.jsx
+// ─────────────────────────────────────────────────────────
+// Composant de partage — RS buttons + Web Share API + Copy
+// ─────────────────────────────────────────────────────────
+//
+// Usage:
+//   <SharePanel
+//     shareId="abc123"
+//     proposition="Renationaliser les concessions autoroutières..."
+//     scoreGlobal={45}
+//     onClose={() => setShowShare(false)}
+//   />
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { X, Copy, Check, Share2 } from 'lucide-react'
+'use client';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://butterflygov.com'
+import { useState, useEffect, useCallback } from 'react';
 
-// Share intent URLs — zero API keys required
-function buildShareLinks(shareUrl, title) {
-  const encoded = encodeURIComponent(shareUrl)
-  const encodedTitle = encodeURIComponent(title)
-  return {
-    x:        `https://x.com/intent/tweet?url=${encoded}&text=${encodedTitle}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encoded}`,
-    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encoded}`,
-    whatsapp: `https://api.whatsapp.com/send?text=${encodedTitle}%20${encoded}`,
-    telegram: `https://t.me/share/url?url=${encoded}&text=${encodedTitle}`,
-  }
-}
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://butterflygov.com';
 
-/**
- * SharePanel — bottom sheet for social sharing.
- *
- * Props:
- *   open        {boolean}
- *   onClose     {() => void}
- *   analysisData {object}  — see lib/share.js createShare() signature
- *   getAccessToken {() => Promise<string>}
- */
-export default function SharePanel({ open, onClose, analysisData, getAccessToken }) {
-  const [shareUrl, setShareUrl] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState(null)
+// ── Configs des réseaux sociaux ─────────────────────────
+const NETWORKS = [
+  {
+    id: 'twitter',
+    label: '𝕏',
+    color: '#E8E6E1',
+    bg: '#1A1A2E',
+    buildUrl: (url, text) =>
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+  },
+  {
+    id: 'facebook',
+    label: 'f',
+    color: '#4267B2',
+    bg: '#0E1A3A',
+    buildUrl: (url) =>
+      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+  },
+  {
+    id: 'linkedin',
+    label: 'in',
+    color: '#0A66C2',
+    bg: '#0A1929',
+    buildUrl: (url, text) =>
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+  },
+  {
+    id: 'whatsapp',
+    label: 'W',
+    color: '#25D366',
+    bg: '#0A2916',
+    buildUrl: (url, text) =>
+      `https://api.whatsapp.com/send?text=${encodeURIComponent(text + '\n' + url)}`,
+  },
+  {
+    id: 'telegram',
+    label: '✈',
+    color: '#26A5E4',
+    bg: '#0A1F2E',
+    buildUrl: (url, text) =>
+      `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+  },
+];
 
-  const title = analysisData?.type === 'debat'
-    ? `J'ai comparé deux lois sur Butterfly.gov !`
-    : `J'ai testé "${analysisData?.proposition?.slice(0, 50)}" sur Butterfly.gov — Score ${analysisData?.score_global}/100`
+export default function SharePanel({ shareId, proposition, scoreGlobal, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const [canNativeShare, setCanNativeShare] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
 
-  const generateLink = async () => {
-    if (shareUrl) return
-    setLoading(true)
-    setError(null)
+  const shareUrl = `${BASE_URL}/share/${shareId}`;
+  const shareText = `"${proposition.slice(0, 100)}${proposition.length > 100 ? '…' : ''}" — Score ${scoreGlobal}/100 sur Butterfly.gov`;
+
+  useEffect(() => {
+    setCanNativeShare(typeof navigator !== 'undefined' && !!navigator.share);
+    // Trigger entrance animation
+    requestAnimationFrame(() => setIsVisible(true));
+  }, []);
+
+  // ── Copy link ─────────────────────────────────────────
+  const handleCopy = useCallback(async () => {
     try {
-      const token = getAccessToken ? await getAccessToken() : null
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(analysisData),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Erreur création du lien')
-      setShareUrl(data.shareUrl)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = shareUrl;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-  }
+  }, [shareUrl]);
 
-  // Open share panel → immediately generate the link
-  const handleOpen = () => {
-    if (!shareUrl && !loading) generateLink()
-  }
+  // ── Native share (mobile) ────────────────────────────
+  const handleNativeShare = useCallback(async () => {
+    try {
+      await navigator.share({
+        title: 'Butterfly.gov — Analyse',
+        text: shareText,
+        url: shareUrl,
+      });
+    } catch (err) {
+      // User cancelled — c'est normal
+      if (err.name !== 'AbortError') {
+        console.error('Share failed:', err);
+      }
+    }
+  }, [shareText, shareUrl]);
 
-  const copyLink = async () => {
-    if (!shareUrl) return
-    await navigator.clipboard.writeText(shareUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  // ── Open RS intent ────────────────────────────────────
+  const handleShare = useCallback((network) => {
+    const url = network.buildUrl(shareUrl, shareText);
+    window.open(url, '_blank', 'width=600,height=400,noopener,noreferrer');
+  }, [shareUrl, shareText]);
 
-  const nativeShare = () => {
-    if (!shareUrl || !navigator.share) return
-    navigator.share({ title: '🦋 Butterfly.gov', text: title, url: shareUrl }).catch(() => {})
-  }
-
-  const links = shareUrl ? buildShareLinks(shareUrl, title) : null
-
-  const SocialButton = ({ href, emoji, label, color }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${color} hover:opacity-90`}
-    >
-      <span className="text-2xl">{emoji}</span>
-      <span className="text-xs text-white font-medium">{label}</span>
-    </a>
-  )
+  // ── Close on escape ───────────────────────────────────
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
 
   return (
-    <AnimatePresence onExitComplete={() => { setShareUrl(null); setError(null) }}>
-      {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 9998,
+          opacity: isVisible ? 1 : 0,
+          transition: 'opacity 0.25s ease-out',
+        }}
+      />
 
-          {/* Bottom sheet */}
-          <motion.div
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-white/10 rounded-t-3xl p-6 pb-8 max-w-lg mx-auto"
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            onAnimationComplete={handleOpen}
+      {/* Panel */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: '50%',
+          transform: `translateX(-50%) translateY(${isVisible ? '0' : '100%'})`,
+          width: '100%',
+          maxWidth: '480px',
+          zIndex: 9999,
+          background: '#111118',
+          borderRadius: '20px 20px 0 0',
+          padding: '28px 24px 36px',
+          transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}
+      >
+        {/* Handle bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+          <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: '#333' }} />
+        </div>
+
+        {/* Title */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: 600, color: '#E8E6E1' }}>
+            Partager cette analyse
+          </h3>
+          <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>
+            Score {scoreGlobal}/100 — l'image sera générée automatiquement
+          </p>
+        </div>
+
+        {/* ── Native share button (mobile) ─────────────── */}
+        {canNativeShare && (
+          <button
+            onClick={handleNativeShare}
+            style={{
+              width: '100%',
+              padding: '14px',
+              borderRadius: '14px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #8B6BEF 0%, #5B8DEF 100%)',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+            }}
           >
-            {/* Handle */}
-            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-5" />
+            <span style={{ fontSize: '18px' }}>📤</span>
+            Partager…
+          </button>
+        )}
 
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-bold text-white flex items-center gap-2"><Share2 className="w-4 h-4 text-blue-400" />Partager</h3>
-              <button onClick={onClose} className="text-muted-foreground hover:text-white transition-colors"><X className="w-5 h-5" /></button>
-            </div>
+        {/* ── Social network buttons ────────────────────── */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '12px',
+            marginBottom: '20px',
+          }}
+        >
+          {NETWORKS.map((network, i) => (
+            <button
+              key={network.id}
+              onClick={() => handleShare(network)}
+              title={`Partager sur ${network.id}`}
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                border: `1px solid ${network.color}20`,
+                background: network.bg,
+                color: network.color,
+                fontSize: network.id === 'telegram' ? '20px' : '18px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease-out',
+                opacity: isVisible ? 1 : 0,
+                transform: isVisible ? 'translateY(0)' : 'translateY(10px)',
+                transitionDelay: `${i * 50 + 100}ms`,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = `${network.color}20`;
+                e.currentTarget.style.borderColor = `${network.color}50`;
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = network.bg;
+                e.currentTarget.style.borderColor = `${network.color}20`;
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              {network.label}
+            </button>
+          ))}
+        </div>
 
-            {/* Title preview */}
-            <p className="text-sm text-white/70 mb-5 leading-relaxed line-clamp-2">{title}</p>
-
-            {loading && (
-              <div className="text-center py-6 text-sm text-muted-foreground animate-pulse">Génération du lien…</div>
-            )}
-
-            {error && (
-              <div className="text-center py-4 text-sm text-red-400">{error}</div>
-            )}
-
-            {shareUrl && (
-              <>
-                {/* Native share (mobile) */}
-                {'share' in navigator && (
-                  <button
-                    onClick={nativeShare}
-                    className="w-full mb-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                  >
-                    📤 Partager via…
-                  </button>
-                )}
-
-                {/* Social buttons grid */}
-                <div className="grid grid-cols-5 gap-2 mb-4">
-                  <SocialButton href={links.x}        emoji="𝕏"  label="Twitter"   color="bg-black border border-white/20" />
-                  <SocialButton href={links.facebook}  emoji="f"  label="Facebook"  color="bg-[#1877f2]" />
-                  <SocialButton href={links.linkedin}  emoji="in" label="LinkedIn"  color="bg-[#0a66c2]" />
-                  <SocialButton href={links.whatsapp}  emoji="💬" label="WhatsApp"  color="bg-[#25d366]" />
-                  <SocialButton href={links.telegram}  emoji="✈️" label="Telegram"  color="bg-[#229ed9]" />
-                </div>
-
-                {/* Copy link */}
-                <button
-                  onClick={copyLink}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm"
-                >
-                  <span className="text-white/70 truncate mr-2">{shareUrl}</span>
-                  {copied ? <Check className="w-4 h-4 text-green-400 shrink-0" /> : <Copy className="w-4 h-4 text-muted-foreground shrink-0" />}
-                </button>
-              </>
-            )}
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  )
+        {/* ── Copy link ──────────────────────────────────── */}
+        <button
+          onClick={handleCopy}
+          style={{
+            width: '100%',
+            padding: '13px 16px',
+            borderRadius: '12px',
+            border: '1px solid #ffffff10',
+            background: copied ? 'rgba(107,203,142,0.1)' : '#ffffff06',
+            color: copied ? '#6BCB8E' : '#999',
+            fontSize: '14px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s',
+            fontFamily: 'monospace',
+          }}
+        >
+          <span style={{ fontSize: '15px' }}>{copied ? '✓' : '🔗'}</span>
+          {copied ? 'Lien copié !' : shareUrl}
+        </button>
+      </div>
+    </>
+  );
 }

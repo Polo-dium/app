@@ -1,128 +1,372 @@
-import { ImageResponse } from 'next/og'
-import { getShare } from '@/lib/share'
+// app/api/og/[id]/route.jsx
+// ─────────────────────────────────────────────────────────
+// Génère l'image OG 1080x1080 côté serveur via next/og
+// URL: /api/og/[id]
+// ─────────────────────────────────────────────────────────
 
-export const runtime = 'edge'
+import { ImageResponse } from 'next/og';
+import { getShare } from '@/lib/share';
+
+export const runtime = 'edge';
+
+// ── Couleurs par catégorie ──────────────────────────────
+const SCORE_COLORS = {
+  economy:     '#E8B931',
+  social:      '#EF5B8D',
+  ecology:     '#6BCB8E',
+  faisabilite: '#8B6BEF',
+};
+
+const SCORE_LABELS = {
+  economy:     'ÉCONOMIE',
+  social:      'SOCIAL',
+  ecology:     'ÉCOLOGIE',
+  faisabilite: 'FAISABILITÉ',
+};
+
+const SCORE_ICONS = {
+  economy:     '📈',
+  social:      '❤️',
+  ecology:     '🌿',
+  faisabilite: '⚙️',
+};
+
+function getScoreColor(score) {
+  if (score >= 70) return '#6BCB8E';
+  if (score >= 50) return '#E8B931';
+  if (score >= 35) return '#EF8B5B';
+  return '#EF5B5B';
+}
 
 export async function GET(request, { params }) {
-  const { id } = params
-  const share = await getShare(id)
+  const { id } = params;
 
-  const isDebate = share?.type === 'debat'
+  const share = await getShare(id);
 
   // Fallback image if share not found
   if (!share) {
     return new ImageResponse(
       (
-        <div style={{ display: 'flex', width: '100%', height: '100%', background: '#0a0a0a', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 48, color: '#3b82f6' }}>Butterfly.gov</span>
+        <div
+          style={{
+            width: 1080,
+            height: 1080,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(180deg, #0A0A12 0%, #0D0B18 50%, #0A0A12 100%)',
+            fontFamily: 'system-ui, sans-serif',
+          }}
+        >
+          <span style={{ fontSize: '48px', color: '#8B6BEF', letterSpacing: '4px', fontWeight: 600 }}>
+            ✦ BUTTERFLY.GOV ✦
+          </span>
         </div>
       ),
       { width: 1080, height: 1080 }
-    )
+    );
   }
 
-  const scoreColor = (s) => {
-    if (s >= 70) return '#4ade80'
-    if (s >= 40) return '#facc15'
-    return '#f87171'
-  }
+  const isDebate = share.type === 'debat';
 
-  return new ImageResponse(
-    isDebate ? (
-      // ── DÉBAT layout ──
-      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: '#0a0a0a', padding: 60, fontFamily: 'sans-serif' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 40 }}>
-          <span style={{ fontSize: 28, color: '#3b82f6', fontWeight: 700 }}>🦋 Butterfly.gov</span>
-          <span style={{ fontSize: 18, color: '#6b7280', marginLeft: 8 }}>Mode Débat</span>
-        </div>
+  try {
+    return new ImageResponse(
+      isDebate ? (
+        // ── DÉBAT layout ──────────────────────────────────
+        <div
+          style={{
+            width: 1080,
+            height: 1080,
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'linear-gradient(180deg, #0A0A12 0%, #0D0B18 50%, #0A0A12 100%)',
+            padding: '60px',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Background glow */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(139,107,239,0.06) 0%, transparent 60%)',
+              display: 'flex',
+            }}
+          />
 
-        {/* Laws */}
-        <div style={{ display: 'flex', gap: 32, flex: 1 }}>
-          {[
-            { label: 'LOI A', title: share.loi_a_titre, scores: share.loi_a_scores, color: '#3b82f6' },
-            { label: 'LOI B', title: share.loi_b_titre, scores: share.loi_b_scores, color: '#ef4444' },
-          ].map(({ label, title, scores, color }) => (
-            <div key={label} style={{ display: 'flex', flexDirection: 'column', flex: 1, background: '#111827', borderRadius: 20, padding: 36, border: `2px solid ${color}40` }}>
-              <div style={{ fontSize: 16, color, fontWeight: 700, marginBottom: 12 }}>{label}</div>
-              <div style={{ fontSize: 22, color: '#f9fafb', fontWeight: 600, marginBottom: 28, lineHeight: 1.3 }}>
-                {title?.length > 80 ? title.slice(0, 80) + '…' : title}
-              </div>
-              {scores && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[['💰 Économie', scores.economy], ['❤️ Social', scores.social], ['🌿 Écologie', scores.ecology], ['⚙️ Faisabilité', scores.faisabilite]].map(([k, v]) => (
-                    <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontSize: 14, color: '#9ca3af', width: 130 }}>{k}</span>
-                      <div style={{ flex: 1, background: '#1f2937', borderRadius: 6, height: 10 }}>
-                        <div style={{ width: `${v}%`, height: '100%', background: scoreColor(v), borderRadius: 6 }} />
+          {/* Branding */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '40px' }}>
+            <span style={{ fontSize: '22px', color: '#8B6BEF', letterSpacing: '4px', fontWeight: 600 }}>
+              ✦ BUTTERFLY.GOV ✦
+            </span>
+          </div>
+
+          {/* Mode label */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
+            <span style={{ fontSize: '15px', color: '#666', letterSpacing: '2px', textTransform: 'uppercase' }}>
+              Mode Débat
+            </span>
+          </div>
+
+          {/* Laws side by side */}
+          <div style={{ display: 'flex', gap: '24px', flex: 1 }}>
+            {[
+              { label: 'LOI A', title: share.loi_a_titre, scores: share.loi_a_scores, color: '#5B8DEF' },
+              { label: 'LOI B', title: share.loi_b_titre, scores: share.loi_b_scores, color: '#EF5B8D' },
+            ].map(({ label, title, scores, color }) => (
+              <div
+                key={label}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '32px',
+                  borderRadius: '20px',
+                  border: `1.5px solid ${color}30`,
+                  background: `linear-gradient(180deg, ${color}08 0%, ${color}03 100%)`,
+                }}
+              >
+                <div style={{ fontSize: '14px', color, fontWeight: 700, letterSpacing: '2px', marginBottom: '12px' }}>{label}</div>
+                <div style={{ fontSize: '20px', color: '#E8E6E1', fontWeight: 600, marginBottom: '24px', lineHeight: 1.35 }}>
+                  "{title?.length > 80 ? title.slice(0, 80) + '…' : title}"
+                </div>
+                {scores && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {Object.entries(SCORE_COLORS).map(([key, clr]) => (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '13px', color: '#666', width: '110px' }}>{SCORE_LABELS[key]}</span>
+                        <div style={{ flex: 1, background: '#1A1A2E', borderRadius: '6px', height: '8px', display: 'flex' }}>
+                          <div style={{ width: `${scores[key] || 0}%`, height: '100%', background: clr, borderRadius: '6px' }} />
+                        </div>
+                        <span style={{ fontSize: '16px', color: clr, fontWeight: 700, width: '36px', textAlign: 'right' }}>{scores[key] ?? '?'}</span>
                       </div>
-                      <span style={{ fontSize: 16, color: scoreColor(v), fontWeight: 700, width: 40, textAlign: 'right' }}>{v}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '32px' }}>
+            <span style={{ fontSize: '14px', color: '#444', letterSpacing: '1px' }}>
+              butterfly.gov • Simulateur politique propulsé par IA
+            </span>
+          </div>
+        </div>
+      ) : (
+        // ── ANALYSE layout ────────────────────────────────
+        <div
+          style={{
+            width: 1080,
+            height: 1080,
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'linear-gradient(180deg, #0A0A12 0%, #0D0B18 50%, #0A0A12 100%)',
+            padding: '60px',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Background glow */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(139,107,239,0.06) 0%, transparent 60%)',
+              display: 'flex',
+            }}
+          />
+
+          {/* Branding */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '12px',
+              marginBottom: '40px',
+            }}
+          >
+            <span style={{ fontSize: '22px', color: '#8B6BEF', letterSpacing: '4px', fontWeight: 600 }}>
+              ✦ BUTTERFLY.GOV ✦
+            </span>
+          </div>
+
+          {/* Proposition text */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '44px',
+              padding: '0 20px',
+            }}
+          >
+            <span
+              style={{
+                fontSize: share.proposition?.length > 80 ? '28px' : '32px',
+                color: '#E8E6E1',
+                textAlign: 'center',
+                lineHeight: 1.35,
+                fontWeight: 600,
+                maxWidth: '880px',
+                display: 'block',
+              }}
+            >
+              "{share.proposition}"
+            </span>
+          </div>
+
+          {/* Label */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '36px' }}>
+            <span style={{ fontSize: '15px', color: '#666', letterSpacing: '2px', textTransform: 'uppercase' }}>
+              Analyse d'impact présidentiel
+            </span>
+          </div>
+
+          {/* Score cards grid */}
+          {share.scores && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '20px',
+                marginBottom: '36px',
+              }}
+            >
+              {Object.entries(SCORE_COLORS).map(([key, color]) => (
+                <div
+                  key={key}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '200px',
+                    height: '160px',
+                    borderRadius: '20px',
+                    border: `1.5px solid ${color}30`,
+                    background: `linear-gradient(180deg, ${color}08 0%, ${color}03 100%)`,
+                  }}
+                >
+                  <span style={{ fontSize: '26px', marginBottom: '4px' }}>
+                    {SCORE_ICONS[key]}
+                  </span>
+                  <span style={{ fontSize: '13px', color: color, letterSpacing: '2px', fontWeight: 500, marginBottom: '8px' }}>
+                    {SCORE_LABELS[key]}
+                  </span>
+                  <span style={{ fontSize: '48px', fontWeight: 700, color: color }}>
+                    {share.scores[key] ?? '?'}
+                  </span>
+                  <span style={{ fontSize: '14px', color: '#555' }}>/100</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Score global */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '36px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                padding: '16px 40px',
+                borderRadius: '60px',
+                border: `2px solid ${getScoreColor(share.score_global)}40`,
+                background: `${getScoreColor(share.score_global)}10`,
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>⭐</span>
+              <span style={{ fontSize: '24px', fontWeight: 700, color: getScoreColor(share.score_global) }}>
+                Score Global: {share.score_global}/100
+              </span>
+            </div>
+          </div>
+
+          {/* Gagnants / Perdants */}
+          {(share.gagnants || share.perdants) && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '20px',
+                marginBottom: '32px',
+                padding: '0 10px',
+              }}
+            >
+              {/* Gagnants */}
+              {share.gagnants && (
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '22px 26px',
+                    borderRadius: '18px',
+                    border: '1.5px solid rgba(107,203,142,0.2)',
+                    background: 'rgba(107,203,142,0.05)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>🏆</span>
+                    <span style={{ fontSize: '15px', color: '#6BCB8E', fontWeight: 700, letterSpacing: '1px' }}>GAGNANTS</span>
+                  </div>
+                  <span style={{ fontSize: '16px', color: '#B0AEA6', lineHeight: 1.5 }}>
+                    {share.gagnants.length > 100 ? share.gagnants.slice(0, 100) + '…' : share.gagnants}
+                  </span>
+                </div>
+              )}
+
+              {/* Perdants */}
+              {share.perdants && (
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '22px 26px',
+                    borderRadius: '18px',
+                    border: '1.5px solid rgba(239,107,91,0.2)',
+                    background: 'rgba(239,107,91,0.05)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>💥</span>
+                    <span style={{ fontSize: '15px', color: '#EF6B5B', fontWeight: 700, letterSpacing: '1px' }}>PERDANTS</span>
+                  </div>
+                  <span style={{ fontSize: '16px', color: '#B0AEA6', lineHeight: 1.5 }}>
+                    {share.perdants.length > 100 ? share.perdants.slice(0, 100) + '…' : share.perdants}
+                  </span>
                 </div>
               )}
             </div>
-          ))}
-        </div>
+          )}
 
-        <div style={{ marginTop: 32, fontSize: 16, color: '#4b5563' }}>butterflygov.com · Simulateur de lois par IA</div>
-      </div>
-    ) : (
-      // ── ANALYSE layout ──
-      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: '#0a0a0a', padding: 60, fontFamily: 'sans-serif' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 40 }}>
-          <span style={{ fontSize: 28, color: '#3b82f6', fontWeight: 700 }}>🦋 Butterfly.gov</span>
-          <span style={{ fontSize: 18, color: '#6b7280' }}>Simulateur de lois</span>
-        </div>
-
-        {/* Law text */}
-        <div style={{ background: '#111827', borderRadius: 20, padding: 40, marginBottom: 36 }}>
-          <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>PROPOSITION DE LOI</div>
-          <div style={{ fontSize: 32, color: '#f9fafb', fontWeight: 700, lineHeight: 1.3 }}>
-            "{share.proposition?.length > 120 ? share.proposition.slice(0, 120) + '…' : share.proposition}"
+          {/* Footer */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginTop: 'auto',
+            }}
+          >
+            <span style={{ fontSize: '14px', color: '#444', letterSpacing: '1px' }}>
+              butterfly.gov • Simulateur politique propulsé par IA
+            </span>
           </div>
         </div>
-
-        {/* Scores grid */}
-        {share.scores && (
-          <div style={{ display: 'flex', gap: 24, marginBottom: 36 }}>
-            {[['💰', 'Économie', share.scores.economy], ['❤️', 'Social', share.scores.social], ['🌿', 'Écologie', share.scores.ecology], ['⚙️', 'Faisabilité', share.scores.faisabilite]].map(([emoji, label, val]) => (
-              <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, background: '#111827', borderRadius: 16, padding: '24px 16px' }}>
-                <div style={{ fontSize: 28 }}>{emoji}</div>
-                <div style={{ fontSize: 40, color: scoreColor(val), fontWeight: 800, marginTop: 8 }}>{val}</div>
-                <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>{label}</div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, background: '#1e3a5f', borderRadius: 16, padding: '24px 16px', border: '2px solid #3b82f6' }}>
-              <div style={{ fontSize: 28 }}>⭐</div>
-              <div style={{ fontSize: 40, color: '#60a5fa', fontWeight: 800, marginTop: 8 }}>{share.score_global}</div>
-              <div style={{ fontSize: 14, color: '#93c5fd', marginTop: 4 }}>Global</div>
-            </div>
-          </div>
-        )}
-
-        {/* Gagnants / Perdants */}
-        {(share.gagnants || share.perdants) && (
-          <div style={{ display: 'flex', gap: 24, marginBottom: 32 }}>
-            {share.gagnants && (
-              <div style={{ flex: 1, background: '#052e16', borderRadius: 12, padding: '16px 20px' }}>
-                <div style={{ fontSize: 13, color: '#4ade80', marginBottom: 6 }}>✅ GAGNANTS</div>
-                <div style={{ fontSize: 18, color: '#bbf7d0' }}>{share.gagnants.length > 80 ? share.gagnants.slice(0, 80) + '…' : share.gagnants}</div>
-              </div>
-            )}
-            {share.perdants && (
-              <div style={{ flex: 1, background: '#450a0a', borderRadius: 12, padding: '16px 20px' }}>
-                <div style={{ fontSize: 13, color: '#f87171', marginBottom: 6 }}>❌ PERDANTS</div>
-                <div style={{ fontSize: 18, color: '#fecaca' }}>{share.perdants.length > 80 ? share.perdants.slice(0, 80) + '…' : share.perdants}</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div style={{ fontSize: 16, color: '#4b5563' }}>butterflygov.com · Analyse par IA Claude</div>
-      </div>
-    ),
-    { width: 1080, height: 1080 }
-  )
+      ),
+      {
+        width: 1080,
+        height: 1080,
+      }
+    );
+  } catch (error) {
+    console.error('OG image generation error:', error);
+    return new Response('Failed to generate image', { status: 500 });
+  }
 }

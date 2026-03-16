@@ -950,8 +950,8 @@ function ButterflyApp() {
   const [explainLoading, setExplainLoading] = useState(false)
   const [explainSourceCount, setExplainSourceCount] = useState(0)
   const [explainSearching, setExplainSearching] = useState('')
-  const [showSharePanel, setShowSharePanel] = useState(false)
-  const [sharePanelData, setSharePanelData] = useState(null)
+  const [sharePanel, setSharePanel] = useState(null)   // { shareId, proposition, scoreGlobal } | null
+  const [shareCreating, setShareCreating] = useState(false)
   const cardRef = useRef(null)
   const debateCardRef = useRef(null)
   
@@ -1017,7 +1017,24 @@ function ButterflyApp() {
     finally { setExplainLoading(false); setExplainSearching('') }
   }
 
-  const openSharePanel = (data) => { setSharePanelData(data); setShowSharePanel(true) }
+  const openSharePanel = async (data) => {
+    setShareCreating(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(data),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Erreur création du lien')
+      setSharePanel({ shareId: json.shareId, proposition: data.proposition || data.loi_a_titre || '', scoreGlobal: data.score_global || 0 })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setShareCreating(false)
+    }
+  }
 
   const handleUpgrade = async () => {
     const token = await getAccessToken()
@@ -1037,7 +1054,7 @@ function ButterflyApp() {
     <main className="min-h-screen flex flex-col">
       {rateLimitExceeded && <SoftWall userTier={rateLimitExceeded.userTier} resetAt={rateLimitExceeded.resetAt} onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }} onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }} />}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
-      <SharePanel open={showSharePanel} onClose={() => setShowSharePanel(false)} analysisData={sharePanelData} getAccessToken={getAccessToken} />
+      {sharePanel && <SharePanel shareId={sharePanel.shareId} proposition={sharePanel.proposition} scoreGlobal={sharePanel.scoreGlobal} onClose={() => setSharePanel(null)} />}
       <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -1153,7 +1170,7 @@ function ButterflyApp() {
                         <Lock className="w-3 h-3 mr-1.5" /><MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
                       </Button>
                     )}
-                    <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} variant="outline" className="border-white/20 hover:bg-white/10"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
+                    <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle loi</Button>
                   </div>
                 </>
@@ -1210,7 +1227,7 @@ function ButterflyApp() {
                   </div>
                   <DebateShareButtons cardRef={debateCardRef} law1Text={law1Text} law2Text={law2Text} debateResult={debateResult} />
                   <div className="flex justify-center gap-3 flex-wrap">
-                    <Button onClick={() => openSharePanel({ type: 'debat', proposition: law1Text, loi_a_titre: law1Text, loi_b_titre: law2Text, loi_a_scores: debateResult.law1.analysis.scores, loi_b_scores: debateResult.law2.analysis.scores, verdict: debateResult.verdict })} variant="outline" className="border-white/20 hover:bg-white/10"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
+                    <Button onClick={() => openSharePanel({ type: 'debat', proposition: law1Text, loi_a_titre: law1Text, loi_b_titre: law2Text, loi_a_scores: debateResult.law1.analysis.scores, loi_b_scores: debateResult.law2.analysis.scores, verdict: debateResult.verdict })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button>
                   </div>
                 </>
