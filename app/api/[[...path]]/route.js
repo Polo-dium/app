@@ -38,6 +38,35 @@ const DEBATE_CHAT_LIMITS = {
 // Dynamic current year (avoids hardcoded dates)
 const CURRENT_YEAR = new Date().getFullYear()
 
+// ── Continuation helper ────────────────────────────────────────────────────
+// Claude can truncate long responses (stop_reason === 'max_tokens').
+// This helper retries up to MAX_LOOPS times to get the complete text.
+const MAX_CONTINUATION_LOOPS = 3
+
+async function getCompleteMessage(client, params) {
+  let fullText = ''
+  let messages = [...params.messages]
+  let loopCount = 0
+
+  while (loopCount < MAX_CONTINUATION_LOOPS) {
+    const response = await client.messages.create({ ...params, messages })
+    const chunk = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+    fullText += chunk
+
+    if (response.stop_reason !== 'max_tokens') break
+
+    // Append partial response and ask Claude to continue
+    messages = [
+      ...messages,
+      { role: 'assistant', content: chunk },
+      { role: 'user', content: 'Continue exactement où tu t\'es arrêté, sans répéter ce qui a déjà été dit.' }
+    ]
+    loopCount++
+  }
+
+  return fullText
+}
+
 // System prompt for Butterfly.gov analysis
 const SYSTEM_PROMPT = `Rôle :
 Tu es le moteur logique de "Butterfly.gov", un simulateur macro-économique, sociologique et environnemental ultra-avancé. Ton rôle est de calculer de manière clinique, neutre et objective les conséquences de la loi ou mesure politique proposée par l'utilisateur.
@@ -521,13 +550,13 @@ Génère un message d'ouverture percutant (2 paragraphes max) pour attaquer cett
 - Termine OBLIGATOIREMENT par une question rhétorique directe qui force l'utilisateur à se défendre
 - Pas de JSON, juste le texte d'ouverture`
 
-      const firstResp = await client.messages.create({
+      const firstText = await getCompleteMessage(client, {
         model: MODEL_FREE,
-        max_tokens: 700,
+        max_tokens: 1200,
         system: firstMsgSystem,
         messages: [{ role: 'user', content: 'Commence le débat.' }],
       })
-      return NextResponse.json({ firstMessage: firstResp.content[0].text }, { headers: corsHeaders })
+      return NextResponse.json({ firstMessage: firstText }, { headers: corsHeaders })
     }
 
     const formattedMessages = messages.map(m => ({ role: m.role, content: m.content }))
@@ -572,14 +601,12 @@ Format JSON STRICT à respecter :
   "conclusion": "<1 phrase drôle, cynique et piquante style L'Opposant Féroce pour clore le débat>"
 }`
 
-      const summaryResp = await client.messages.create({
+      const rawText = await getCompleteMessage(client, {
         model: MODEL_FREE,
-        max_tokens: 1200,
+        max_tokens: 1800,
         system: summarySystem,
         messages: [{ role: 'user', content: `Voici le débat à analyser :\n\n${convoText}` }],
       })
-
-      const rawText = summaryResp.content[0].text
       // Try to parse JSON, fallback to raw text
       let summaryData
       try {
@@ -614,13 +641,12 @@ SCORES ACTUELS:
 
 Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
 
-    const response = await client.messages.create({
+    const text = await getCompleteMessage(client, {
       model: MODEL_FREE,
       max_tokens: 2048,
       system: systemWithContext,
       messages: formattedMessages,
     })
-    const text = response.content[0].text
 
     let responseText = text
     let scoreAdjustment = null
