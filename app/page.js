@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 import confetti from 'canvas-confetti'
 import { createClient } from '@/lib/supabase/client'
-import { getDailyLaws } from '@/lib/daily-laws'
+import { getDailyLaws, getDebateLaws } from '@/lib/daily-laws'
 import { getDailyExplorerLaws } from '@/lib/explorer-laws'
 import SharePanel from '@/components/SharePanel'
 
@@ -858,6 +858,7 @@ function ButterflyApp() {
   const [explainSearching, setExplainSearching] = useState('')
   const [sharePanel, setSharePanel] = useState(null)   // { shareId, proposition, scoreGlobal } | null
   const [shareCreating, setShareCreating] = useState(false)
+  const [proposalSeed, setProposalSeed] = useState(0)
 
   // ── Lecture des URL params (ex: depuis l'Explorateur) ─
   useEffect(() => {
@@ -1100,10 +1101,56 @@ function ButterflyApp() {
               
               {mode === 'single' && (
                 <div className="space-y-3">
-                  <p className="text-sm text-center text-muted-foreground">Propositions du jour</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Propositions du jour</p>
+                    <button onClick={() => setProposalSeed(s => s + 1)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors px-2 py-1 rounded-full hover:bg-white/10">
+                      <RefreshCw className="w-3 h-3" />Voir d'autres
+                    </button>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {getDailyLaws().map((law) => (
+                    {getDailyLaws(proposalSeed).map((law) => (
                       <DailyLawCard key={law.id} law={law} onClick={(text) => setLawText(text)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {mode === 'debate' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Idées de propositions</p>
+                    <button onClick={() => setProposalSeed(s => s + 1)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors px-2 py-1 rounded-full hover:bg-white/10">
+                      <RefreshCw className="w-3 h-3" />Voir d'autres
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <p className="text-xs text-blue-400 font-medium uppercase tracking-wide">Pour LOI A</p>
+                      {getDebateLaws(proposalSeed).gauche.map((law) => (
+                        <DailyLawCard key={law.id} law={law} onClick={(text) => setLaw1Text(text)} />
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs text-red-400 font-medium uppercase tracking-wide">Pour LOI B</p>
+                      {getDebateLaws(proposalSeed).droite.map((law) => (
+                        <DailyLawCard key={law.id} law={law} onClick={(text) => setLaw2Text(text)} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {mode === 'explain' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Lois à explorer</p>
+                    <button onClick={() => setProposalSeed(s => s + 1)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors px-2 py-1 rounded-full hover:bg-white/10">
+                      <RefreshCw className="w-3 h-3" />Voir d'autres
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {getDailyLaws(proposalSeed).map((law) => (
+                      <DailyLawCard key={law.id} law={law} onClick={(text) => setExplainText(text)} />
                     ))}
                   </div>
                 </div>
