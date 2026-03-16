@@ -1256,7 +1256,7 @@ function ButterflyApp() {
                   </div>
                 </>
               ) : explainResult ? (
-                <motion.div key="explain-result" className="w-full max-w-3xl space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div key="explain-result" className="w-full max-w-3xl mx-auto space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-green-400">
                       <BookOpen className="w-5 h-5" />
