@@ -1259,6 +1259,9 @@ function ButterflyApp() {
                       <Button onClick={() => { setMode('debate'); setLaw1Text(explainText); setExplainResult('') }} variant="outline" className="border-purple-500/30 hover:bg-purple-500/10 text-purple-400">
                         <Swords className="w-4 h-4 mr-2" />Débattre →
                       </Button>
+                      <Button onClick={() => window.location.href = `/explorer?loi=${encodeURIComponent(explainText)}`} variant="outline" className="border-violet-500/30 hover:bg-violet-500/10 text-violet-400">
+                        <Network className="w-4 h-4 mr-2" />Explorer la carte →
+                      </Button>
                       <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle recherche</Button>
                     </div>
                   )}
