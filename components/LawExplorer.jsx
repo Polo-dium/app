@@ -162,9 +162,8 @@ export default function LawExplorer() {
     const params = new URLSearchParams(window.location.search);
     const loi = params.get('loi');
     if (!loi) return;
-    const decoded = decodeURIComponent(loi);
-    setLawQuery(decoded);
-    fetchConstellation(decoded);
+    setLawQuery(loi);
+    fetchConstellation(loi);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchConstellation = useCallback(async (law) => {
