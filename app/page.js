@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check, Wrench, BookOpen } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check, Wrench, BookOpen, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -1089,7 +1089,10 @@ function ButterflyApp() {
       </div>
       
       <header className="relative z-20 flex justify-between items-center p-4">
-        <div></div>
+        <a href="/explorer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 border border-white/10 hover:border-purple-500/50 hover:bg-purple-500/10 transition-colors text-sm text-muted-foreground hover:text-white">
+          <Network className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Explorer</span>
+        </a>
         <div className="flex items-center gap-2">
           {user ? <UserMenu /> : <Button onClick={() => setShowAuthModal(true)} variant="outline" size="sm"><User className="w-4 h-4 mr-2" />Connexion</Button>}
           <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors">{showSidebar ? <X className="w-5 h-5" /> : <History className="w-5 h-5" />}</button>
@@ -1128,6 +1131,7 @@ function ButterflyApp() {
                   <button onClick={() => setMode('single')} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Analyser</button>
                   <button onClick={() => setMode('debate')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'debate' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-white'}`}>{!isPremium && <Lock className="w-3 h-3" />}<Swords className="w-4 h-4" />Débat</button>
                   <button onClick={() => setMode('explain')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explain' ? 'bg-green-700 text-white' : 'text-muted-foreground hover:text-white'}`}><BookOpen className="w-4 h-4" />Expliquer</button>
+                  <a href="/explorer" className="px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 text-muted-foreground hover:text-white hover:bg-white/10"><Network className="w-4 h-4" />Explorer</a>
                 </div>
               </div>
               
