@@ -630,14 +630,10 @@ export default function LawExplorer() {
               <div style={{ fontSize: 17, fontWeight: 600, color: '#E8E6E1', marginBottom: 8, lineHeight: 1.35 }}>{panelNode.title}</div>
               <div style={{ fontSize: 13, color: '#8A8880', lineHeight: 1.65, marginBottom: 16 }}>{panelNode.summary}</div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=analyse`; }}
+                <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(`Externalités et besoins législatifs de "${panelNode.title}", conséquence de la loi "${lawQuery}"`)}&mode=explain`; }}
                   style={{ flex: 1, padding: '10px 14px', border: `1px solid ${sc}40`, borderRadius: 9, background: `${sc}14`, color: sc, fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = `${sc}28`}
-                  onMouseLeave={e => e.currentTarget.style.background = `${sc}14`}>Analyser →</button>
-                <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=debate`; }}
-                  style={{ padding: '10px 14px', border: '1px solid #ffffff10', borderRadius: 9, background: '#ffffff06', color: '#888', fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#ffffff14'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#ffffff06'}>Débattre ⚔</button>
+                  onMouseLeave={e => e.currentTarget.style.background = `${sc}14`}>📖 Expliquer</button>
                 <button onClick={() => { window.location.href = `/explorer?loi=${encodeURIComponent(panelNode.title)}`; }}
                   style={{ padding: '10px 14px', border: '1px solid #8B6BEF28', borderRadius: 9, background: '#8B6BEF0A', color: '#8B6BEF', fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#8B6BEF1C'}
@@ -673,13 +669,9 @@ export default function LawExplorer() {
             <div style={{ fontSize: 14, fontWeight: 600, color: '#E8E6E1', marginBottom: 5, lineHeight: 1.3 }}>{panelNode.title}</div>
             <div style={{ fontSize: 12, color: '#8A8880', lineHeight: 1.55, marginBottom: 10 }}>{panelNode.summary}</div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=analyse`; }}
+              <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(`Externalités et besoins législatifs de "${panelNode.title}", conséquence de la loi "${lawQuery}"`)}&mode=explain`; }}
                 style={{ flex: 1, padding: '8px 10px', border: `1px solid ${sc}40`, borderRadius: 8, background: `${sc}14`, color: sc, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
-                Analyser →
-              </button>
-              <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=debate`; }}
-                style={{ padding: '8px 10px', border: '1px solid #ffffff10', borderRadius: 8, background: '#ffffff06', color: '#888', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
-                ⚔
+                📖 Expliquer
               </button>
               <button onClick={() => { window.location.href = `/explorer?loi=${encodeURIComponent(panelNode.title)}`; }}
                 style={{ padding: '8px 10px', border: '1px solid #8B6BEF28', borderRadius: 8, background: '#8B6BEF0A', color: '#8B6BEF', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>

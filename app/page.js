@@ -869,6 +869,9 @@ function ButterflyApp() {
       if (modeParam === 'debate') {
         setMode('debate')
         setLaw1Text(decodeURIComponent(loi))
+      } else if (modeParam === 'explain') {
+        setMode('explain')
+        setExplainText(decodeURIComponent(loi))
       } else {
         setMode('single')
         setLawText(decodeURIComponent(loi))
