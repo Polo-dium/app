@@ -5,6 +5,13 @@ import { headers } from 'next/headers'
 import Stripe from 'stripe'
 import { createShare } from '@/lib/share'
 
+// ── Modèles Claude configurables via variables d'environnement ──────────────
+// CLAUDE_MODEL_FREE    → modèle pour les utilisateurs anonymes/gratuits
+// CLAUDE_MODEL_PREMIUM → modèle pour les utilisateurs premium
+// Par défaut : haiku pour les deux (économique et rapide)
+const MODEL_FREE    = process.env.CLAUDE_MODEL_FREE    || 'claude-haiku-4-5-20251001'
+const MODEL_PREMIUM = process.env.CLAUDE_MODEL_PREMIUM || 'claude-haiku-4-5-20251001'
+
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -286,7 +293,7 @@ async function analyzeLaw(law) {
   }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL_FREE,
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Analyse cette proposition de loi: "${law.trim()}"` }]
@@ -468,7 +475,7 @@ async function handleAnalyze(request) {
 async function generateVerdict(law1, law2, analysis1, analysis2) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: MODEL_PREMIUM,
     max_tokens: 1024,
     messages: [{
       role: 'user',
@@ -580,7 +587,7 @@ Génère un message d'ouverture percutant (2 paragraphes max) pour attaquer cett
 - Pas de JSON, juste le texte d'ouverture`
 
       const firstResp = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_FREE,
         max_tokens: 700,
         system: firstMsgSystem,
         messages: [{ role: 'user', content: 'Commence le débat.' }],
@@ -631,7 +638,7 @@ Format JSON STRICT à respecter :
 }`
 
       const summaryResp = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: MODEL_FREE,
         max_tokens: 1200,
         system: summarySystem,
         messages: [{ role: 'user', content: `Voici le débat à analyser :\n\n${convoText}` }],
@@ -673,7 +680,7 @@ SCORES ACTUELS:
 Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisateur.`
 
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: MODEL_FREE,
       max_tokens: 2048,
       system: systemWithContext,
       messages: formattedMessages,

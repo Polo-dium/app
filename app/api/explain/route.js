@@ -4,6 +4,9 @@ import { SYSTEM_PROMPT_EXPLICATION, buildExplicationPrompt } from '@/lib/prompts
 import { createServiceClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 
+// Modèle configurable via variable d'environnement
+const MODEL_FREE = process.env.CLAUDE_MODEL_FREE || 'claude-haiku-4-5-20251001'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -74,7 +77,7 @@ export async function POST(request) {
 
       try {
         const anthropicStream = anthropic.messages.stream({
-          model: 'claude-sonnet-4-20250514',
+          model: MODEL_FREE,
           system: SYSTEM_PROMPT_EXPLICATION,
           max_tokens: 4096,
           tools: [{ type: 'web_search_20250305', name: 'web_search' }],

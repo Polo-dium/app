@@ -952,6 +952,24 @@ function ButterflyApp() {
   const [explainSearching, setExplainSearching] = useState('')
   const [sharePanel, setSharePanel] = useState(null)   // { shareId, proposition, scoreGlobal } | null
   const [shareCreating, setShareCreating] = useState(false)
+
+  // ── Lecture des URL params (ex: depuis l'Explorateur) ─
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const loi = params.get('loi')
+    const modeParam = params.get('mode')
+    if (loi) {
+      if (modeParam === 'debate') {
+        setMode('debate')
+        setLaw1Text(decodeURIComponent(loi))
+      } else {
+        setMode('single')
+        setLawText(decodeURIComponent(loi))
+      }
+      // Nettoyage de l'URL sans rechargement
+      window.history.replaceState({}, '', '/')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const cardRef = useRef(null)
   const debateCardRef = useRef(null)
   
