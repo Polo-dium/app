@@ -1126,6 +1126,7 @@ function ButterflyApp() {
                     )}
                     <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager sur vos réseaux</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle loi</Button>
+                    <Button onClick={() => window.location.href = `/explorer?loi=${encodeURIComponent(lawText)}`} variant="outline" className="border-purple-500/30 hover:bg-purple-500/10 text-purple-400"><Network className="w-4 h-4 mr-2" />Explorer les implications</Button>
                   </div>
                 </>
               ) : debateResult ? (
@@ -1182,6 +1183,7 @@ function ButterflyApp() {
                   <div className="flex justify-center gap-3 flex-wrap">
                     <Button onClick={() => openSharePanel({ type: 'debat', proposition: law1Text, loi_a_titre: law1Text, loi_b_titre: law2Text, loi_a_scores: debateResult.law1.analysis.scores, loi_b_scores: debateResult.law2.analysis.scores, verdict: debateResult.verdict })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager sur vos réseaux</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button>
+                    <Button onClick={() => window.location.href = `/explorer?loi=${encodeURIComponent(law1Text)}`} variant="outline" className="border-purple-500/30 hover:bg-purple-500/10 text-purple-400"><Network className="w-4 h-4 mr-2" />Explorer les implications</Button>
                   </div>
                 </>
               ) : explainResult ? (
