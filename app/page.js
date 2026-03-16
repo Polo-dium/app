@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check, Wrench } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check, Wrench, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +12,7 @@ import html2canvas from 'html2canvas'
 import confetti from 'canvas-confetti'
 import { createClient } from '@/lib/supabase/client'
 import { getDailyLaws } from '@/lib/daily-laws'
+import SharePanel from '@/components/SharePanel'
 
 // Auth Context
 const AuthContext = createContext(null)
@@ -944,6 +945,11 @@ function ButterflyApp() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [rateLimitExceeded, setRateLimitExceeded] = useState(null)
   const [showDebateChat, setShowDebateChat] = useState(false)
+  const [explainText, setExplainText] = useState('')
+  const [explainResult, setExplainResult] = useState('')
+  const [explainLoading, setExplainLoading] = useState(false)
+  const [showSharePanel, setShowSharePanel] = useState(false)
+  const [sharePanelData, setSharePanelData] = useState(null)
   const cardRef = useRef(null)
   const debateCardRef = useRef(null)
   
@@ -978,6 +984,37 @@ function ButterflyApp() {
     finally { setLoading(false) }
   }
   
+  const analyzeExplain = async () => {
+    if (!explainText.trim()) return
+    setExplainLoading(true); setExplainResult(''); setError(null)
+    try {
+      const token = await getAccessToken()
+      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      const response = await fetch('/api/explain', { method: 'POST', headers, body: JSON.stringify({ query: explainText.trim() }) })
+      if (!response.ok) throw new Error('Erreur lors de l\'explication')
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const evt = JSON.parse(line.slice(6))
+            if (evt.type === 'text') setExplainResult(prev => prev + evt.text)
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } catch (err) { setError(err.message) }
+    finally { setExplainLoading(false) }
+  }
+
+  const openSharePanel = (data) => { setSharePanelData(data); setShowSharePanel(true) }
+
   const handleUpgrade = async () => {
     const token = await getAccessToken()
     if (!token) { setShowAuthModal(true); return }
@@ -986,9 +1023,9 @@ function ButterflyApp() {
     if (data.url) window.location.href = data.url
   }
   
-  const reset = () => { setLawText(''); setLaw1Text(''); setLaw2Text(''); setResult(null); setDebateResult(null); setError(null); setRateLimitExceeded(null) }
-  
-  const hasResults = mode === 'single' ? result : debateResult
+  const reset = () => { setLawText(''); setLaw1Text(''); setLaw2Text(''); setResult(null); setDebateResult(null); setExplainText(''); setExplainResult(''); setError(null); setRateLimitExceeded(null) }
+
+  const hasResults = mode === 'single' ? result : mode === 'debate' ? debateResult : explainResult
   
   if (authLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-400" /></div>
   
@@ -996,6 +1033,7 @@ function ButterflyApp() {
     <main className="min-h-screen flex flex-col">
       {rateLimitExceeded && <SoftWall userTier={rateLimitExceeded.userTier} resetAt={rateLimitExceeded.resetAt} onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }} onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }} />}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      <SharePanel open={showSharePanel} onClose={() => setShowSharePanel(false)} analysisData={sharePanelData} getAccessToken={getAccessToken} />
       <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -1029,7 +1067,7 @@ function ButterflyApp() {
       
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6">
         <AnimatePresence mode="wait">
-          {loading ? <AnalysisLoader key="loader" /> : !hasResults ? (
+          {(loading || (explainLoading && !explainResult)) ? <AnalysisLoader key="loader" /> : !hasResults ? (
             <motion.div key="input" className="w-full max-w-2xl space-y-8" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <div className="text-center space-y-4">
                 <motion.div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 via-white/20 to-red-500 p-[2px]" animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 4, repeat: Infinity }}>
@@ -1041,8 +1079,9 @@ function ButterflyApp() {
               
               <div className="flex justify-center">
                 <div className="inline-flex rounded-full bg-black/30 p-1 border border-white/10">
-                  <button onClick={() => setMode('single')} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Loi unique</button>
+                  <button onClick={() => setMode('single')} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Analyser</button>
                   <button onClick={() => setMode('debate')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'debate' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-white'}`}>{!isPremium && <Lock className="w-3 h-3" />}<Swords className="w-4 h-4" />Débat</button>
+                  <button onClick={() => setMode('explain')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explain' ? 'bg-green-700 text-white' : 'text-muted-foreground hover:text-white'}`}><BookOpen className="w-4 h-4" />Expliquer</button>
                 </div>
               </div>
               
@@ -1054,7 +1093,7 @@ function ButterflyApp() {
                     <Button onClick={analyzeLaw} disabled={loading || !lawText.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"><Sparkles className="w-5 h-5" /></Button>
                   </div>
                 </div>
-              ) : (
+              ) : mode === 'debate' ? (
                 <div className="space-y-4">
                   {!isPremium && (
                     <div className="text-center p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
@@ -1069,6 +1108,15 @@ function ButterflyApp() {
                     <div className="space-y-2"><span className="text-sm text-red-400 font-medium">LOI B</span><Input value={law2Text} onChange={(e) => setLaw2Text(e.target.value)} placeholder="Deuxième proposition..." className="bg-card border-2 border-red-500/30 focus:border-red-500" disabled={loading || !isPremium} /></div>
                   </div>
                   <div className="flex justify-center"><Button onClick={analyzeDebate} disabled={loading || !law1Text.trim() || !law2Text.trim() || !isPremium} className="px-8 bg-gradient-to-r from-blue-600 via-purple-600 to-red-500 hover:from-blue-500 hover:via-purple-500 hover:to-red-400"><Swords className="w-5 h-5 mr-2" />Lancer le débat</Button></div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <label className="block text-center text-xl text-white/80">Quelle loi ou réforme voulez-vous comprendre ?</label>
+                  <div className="relative">
+                    <Input type="text" value={explainText} onChange={(e) => setExplainText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeExplain()} placeholder="Ex: Loi travail 2016, Réforme des retraites..." className="h-16 text-lg pl-6 pr-16 rounded-full bg-card border-2 border-white/10 focus:border-green-600 transition-all" disabled={explainLoading} />
+                    <Button onClick={analyzeExplain} disabled={explainLoading || !explainText.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-green-700 hover:bg-green-600"><BookOpen className="w-5 h-5" /></Button>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground">Explication factuelle, sans jugement de valeur · Sources primaires citées</p>
                 </div>
               )}
               
@@ -1101,6 +1149,7 @@ function ButterflyApp() {
                         <Lock className="w-3 h-3 mr-1.5" /><MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
                       </Button>
                     )}
+                    <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} variant="outline" className="border-white/20 hover:bg-white/10"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle loi</Button>
                   </div>
                 </>
@@ -1156,8 +1205,31 @@ function ButterflyApp() {
                     </div>
                   </div>
                   <DebateShareButtons cardRef={debateCardRef} law1Text={law1Text} law2Text={law2Text} debateResult={debateResult} />
-                  <div className="flex justify-center"><Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button></div>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={() => openSharePanel({ type: 'debat', proposition: law1Text, loi_a_titre: law1Text, loi_b_titre: law2Text, loi_a_scores: debateResult.law1.analysis.scores, loi_b_scores: debateResult.law2.analysis.scores, verdict: debateResult.verdict })} variant="outline" className="border-white/20 hover:bg-white/10"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
+                    <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button>
+                  </div>
                 </>
+              ) : explainResult ? (
+                <motion.div key="explain-result" className="w-full max-w-3xl space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <div className="flex items-center gap-2 text-green-400">
+                    <BookOpen className="w-5 h-5" />
+                    <span className="text-sm font-semibold uppercase tracking-widest">Mode Explication</span>
+                    {explainLoading && <span className="text-xs text-muted-foreground animate-pulse ml-2">Analyse en cours…</span>}
+                  </div>
+                  <div className="bg-card rounded-xl border border-white/10 p-6 text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{explainResult}</div>
+                  {!explainLoading && (
+                    <div className="flex justify-center gap-3 flex-wrap">
+                      <Button onClick={() => { setMode('single'); setLawText(explainText); setExplainResult('') }} variant="outline" className="border-green-500/30 hover:bg-green-500/10 text-green-400">
+                        <Sparkles className="w-4 h-4 mr-2" />Analyser l'impact →
+                      </Button>
+                      <Button onClick={() => { setMode('debate'); setLaw1Text(explainText); setExplainResult('') }} variant="outline" className="border-purple-500/30 hover:bg-purple-500/10 text-purple-400">
+                        <Swords className="w-4 h-4 mr-2" />Débattre →
+                      </Button>
+                      <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle recherche</Button>
+                    </div>
+                  )}
+                </motion.div>
               ) : null}
             </motion.div>
           )}

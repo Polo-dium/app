@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
+import { createShare } from '@/lib/share'
 
 // CORS headers
 const corsHeaders = {
@@ -14,11 +15,11 @@ const corsHeaders = {
 // In-memory rate limiting (fallback when Supabase not configured)
 const rateLimitStore = new Map()
 
-// Rate limit configuration (analyze)
+// Rate limit configuration (analyze) — rolling 24h window
 const RATE_LIMITS = {
-  anonymous: { max: 5, windowMs: 60 * 60 * 1000 }, // 5 per hour
-  free: { max: 10, windowMs: 60 * 60 * 1000 },     // 10 per hour
-  premium: { max: 1000, windowMs: 60 * 60 * 1000 } // Unlimited essentially
+  anonymous: { max: 2,    windowMs: 24 * 60 * 60 * 1000 }, // 2 per day
+  free:      { max: 5,    windowMs: 24 * 60 * 60 * 1000 }, // 5 per day
+  premium:   { max: 1000, windowMs: 24 * 60 * 60 * 1000 }  // Unlimited
 }
 
 // Rate limit configuration (debate chat messages — free users)
@@ -26,6 +27,9 @@ const DEBATE_CHAT_LIMITS = {
   free:    { max: 10,   windowMs: 60 * 60 * 1000 }, // 10 messages/h
   premium: { max: 1000, windowMs: 60 * 60 * 1000 }  // Unlimited
 }
+
+// Dynamic current year (avoids hardcoded dates)
+const CURRENT_YEAR = new Date().getFullYear()
 
 // System prompt for Butterfly.gov analysis
 const SYSTEM_PROMPT = `Rôle :
@@ -51,7 +55,9 @@ Structure du JSON attendu :
     "ecology": [Entier de 0 à 100 estimant l'impact sur le climat, la biodiversité et les ressources],
     "faisabilite": [Entier de 0 à 100 estimant la faisabilité réelle: budget disponible, consensus politique possible, complexité réglementaire, délai de mise en œuvre]
   }
-}`
+}
+
+Contexte temporel : Nous sommes en ${CURRENT_YEAR}. Tiens compte du contexte économique et politique actuel.`
 
 // System prompt for "L'Opposant Féroce" - Premium Debate Chat
 const DEBATE_CHAT_PROMPT = `Tu es "L'Opposant Féroce", un débatteur politique, macro-économiste et sociologue brillant, cynique et impitoyable.
@@ -137,12 +143,12 @@ async function checkRateLimit(identifier, identifierType, userTier = 'anonymous'
           allowed: false, 
           remaining: 0, 
           resetAt,
-          message: userTier === 'anonymous' 
-            ? 'Vous avez épuisé vos 5 tests gratuits. Créez un compte gratuit pour obtenir 5 tests supplémentaires par heure, ou passez Premium pour débloquer le Mode Débat.'
-            : 'Vous avez atteint votre limite de tests. Passez Premium pour un accès illimité.'
+          message: userTier === 'anonymous'
+            ? 'Vous avez épuisé vos 2 analyses gratuites du jour. Créez un compte pour obtenir 5 analyses par jour, ou passez Premium pour un accès illimité.'
+            : 'Vous avez utilisé vos 5 analyses du jour. Revenez demain ou passez Premium pour un accès illimité.'
         }
       }
-      
+
       await supabase
         .from('rate_limits')
         .update({ request_count: existing.request_count + 1 })
@@ -171,12 +177,12 @@ async function checkRateLimit(identifier, identifierType, userTier = 'anonymous'
       allowed: false, 
       remaining: 0, 
       resetAt: new Date(record.windowStart + limits.windowMs),
-      message: userTier === 'anonymous' 
-        ? 'Vous avez épuisé vos 5 tests gratuits. Créez un compte gratuit pour obtenir 5 tests supplémentaires par heure, ou passez Premium pour débloquer le Mode Débat.'
-        : 'Vous avez atteint votre limite de tests. Passez Premium pour un accès illimité.'
+      message: userTier === 'anonymous'
+        ? 'Vous avez épuisé vos 2 analyses gratuites du jour. Créez un compte pour obtenir 5 analyses par jour, ou passez Premium pour un accès illimité.'
+        : 'Vous avez utilisé vos 5 analyses du jour. Revenez demain ou passez Premium pour un accès illimité.'
     }
   }
-  
+
   record.count++
   rateLimitStore.set(key, record)
   return { allowed: true, remaining: limits.max - record.count, resetAt: new Date(record.windowStart + limits.windowMs) }
@@ -281,7 +287,7 @@ async function analyzeLaw(law) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
+    max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Analyse cette proposition de loi: "${law.trim()}"` }]
   })
@@ -346,6 +352,10 @@ export async function POST(request, { params }) {
     
     if (endpoint === 'debate-chat') {
       return handleDebateChat(request)
+    }
+
+    if (endpoint === 'share') {
+      return handleCreateShare(request)
     }
     
     if (endpoint === 'stripe/create-checkout') {
@@ -459,7 +469,7 @@ async function generateVerdict(law1, law2, analysis1, analysis2) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 512,
+    max_tokens: 1024,
     messages: [{
       role: 'user',
       content: `Tu es un analyste politique cynique et direct. Compare ces deux lois et explique en 3 phrases maximum pourquoi l'une est meilleure que l'autre selon les scores.
@@ -571,7 +581,7 @@ Génère un message d'ouverture percutant (2 paragraphes max) pour attaquer cett
 
       const firstResp = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 350,
+        max_tokens: 700,
         system: firstMsgSystem,
         messages: [{ role: 'user', content: 'Commence le débat.' }],
       })
@@ -622,7 +632,7 @@ Format JSON STRICT à respecter :
 
       const summaryResp = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600,
+        max_tokens: 1200,
         system: summarySystem,
         messages: [{ role: 'user', content: `Voici le débat à analyser :\n\n${convoText}` }],
       })
@@ -664,7 +674,7 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: systemWithContext,
       messages: formattedMessages,
     })
@@ -688,6 +698,18 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
   } catch (error) {
     console.error('Debate Chat Error:', error)
     return NextResponse.json({ error: 'Erreur lors du débat: ' + error.message }, { status: 500, headers: corsHeaders })
+  }
+}
+
+// Create share
+async function handleCreateShare(request) {
+  try {
+    const body = await request.json()
+    const { shareUrl, ogImageUrl, shareId } = await createShare(body)
+    return NextResponse.json({ shareUrl, ogImageUrl, shareId }, { headers: corsHeaders })
+  } catch (error) {
+    console.error('Share creation error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders })
   }
 }
 
