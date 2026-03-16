@@ -20,8 +20,8 @@ const SECTORS = {
 
 const RING_LABELS = ['Implications directes', 'Lois connexes', 'Conséquences 2ème ordre'];
 
-// Fractions des dimensions pour chaque anneau (orbites elliptiques)
-const RING_FRACTIONS = [0.28, 0.52, 0.80];
+// Fractions des dimensions pour chaque anneau — plus écartés
+const RING_FRACTIONS = [0.33, 0.60, 0.88];
 
 // ── Input vide (pas de loi dans l'URL) ─────────────────
 function EmptyState() {
@@ -94,7 +94,6 @@ function LoadingState({ law }) {
       padding: '40px 24px', fontFamily: 'system-ui, sans-serif', color: '#E8E6E1',
       textAlign: 'center',
     }}>
-      {/* Pulsing rings */}
       <div style={{ position: 'relative', width: 120, height: 120, marginBottom: 40 }}>
         {[0, 1, 2].map(i => (
           <div key={i} style={{
@@ -107,8 +106,8 @@ function LoadingState({ law }) {
         ))}
         <style>{`
           @keyframes pulse-ring {
-            0%, 100% { opacity: 0.2; transform: scale(${1}); }
-            50% { opacity: 0.8; transform: scale(${1.05}); }
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.8; }
           }
         `}</style>
         <div style={{
@@ -132,10 +131,17 @@ function LoadingState({ law }) {
 // ── Composant principal ────────────────────────────────
 export default function LawExplorer() {
   const svgRef = useRef(null);
+  const hoverTimer = useRef(null);
+
   const [dim, setDim] = useState({ w: 800, h: 600 });
+  const [isMobile, setIsMobile] = useState(false);
   const [depth, setDepth] = useState(2);
   const [hoveredId, setHoveredId] = useState(null);
-  const [selectedNode, setSelectedNode] = useState(null);
+
+  // Hover vs click panel system
+  const [panelNode, setPanelNode] = useState(null);
+  const [panelLocked, setPanelLocked] = useState(false);
+
   const [entered, setEntered] = useState(false);
 
   // Data state
@@ -158,6 +164,8 @@ export default function LawExplorer() {
     setLoading(true);
     setApiError(null);
     setConstellationData(null);
+    setPanelNode(null);
+    setPanelLocked(false);
     try {
       const res = await fetch('/api/explore', {
         method: 'POST',
@@ -174,14 +182,18 @@ export default function LawExplorer() {
     }
   }, []);
 
-  // ── Responsive dimensions (rectangular, fills screen) ─
+  // ── Responsive dimensions — mobile: SVG quasi-carré ──
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      // Desktop: wide rectangle. Mobile: ~square
-      const svgW = Math.max(Math.min(w - 20, 1500), 300);
-      const svgH = Math.max(Math.min(h - 185, 900), 300);
+      const mobile = w < 640;
+      setIsMobile(mobile);
+      const svgW = Math.max(Math.min(w - (mobile ? 8 : 20), 1500), 300);
+      // Mobile: cap height to width for near-square SVG (avoid elongated ellipses)
+      const svgH = mobile
+        ? Math.max(Math.min(svgW, h - 200), 260)
+        : Math.max(Math.min(h - 190, 900), 300);
       setDim({ w: svgW, h: svgH });
     };
     update();
@@ -190,7 +202,45 @@ export default function LawExplorer() {
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // ── Show states before main render ──────────────────
+  // ── Node interaction: hover opens panel, click locks ──
+  const handleNodeEnter = useCallback((node) => {
+    clearTimeout(hoverTimer.current);
+    setHoveredId(node.id);
+    if (!panelLocked) setPanelNode(node);
+  }, [panelLocked]);
+
+  const handleNodeLeave = useCallback(() => {
+    setHoveredId(null);
+    if (!panelLocked) {
+      hoverTimer.current = setTimeout(() => setPanelNode(null), 350);
+    }
+  }, [panelLocked]);
+
+  const handleNodeClick = useCallback((node) => {
+    clearTimeout(hoverTimer.current);
+    if (panelLocked && panelNode?.id === node.id) {
+      // Click locked node → unlock & close
+      setPanelLocked(false);
+      setPanelNode(null);
+    } else {
+      // Click any node → lock panel on it
+      setPanelNode(node);
+      setPanelLocked(true);
+    }
+  }, [panelLocked, panelNode]);
+
+  // Hovering the panel itself prevents auto-close
+  const handlePanelEnter = useCallback(() => {
+    clearTimeout(hoverTimer.current);
+  }, []);
+
+  const handlePanelLeave = useCallback(() => {
+    if (!panelLocked) {
+      hoverTimer.current = setTimeout(() => setPanelNode(null), 350);
+    }
+  }, [panelLocked]);
+
+  // ── Guard states ──────────────────────────────────────
   if (!lawQuery && !loading) return <EmptyState />;
   if (loading) return <LoadingState law={lawQuery} />;
   if (apiError) return (
@@ -215,31 +265,31 @@ export default function LawExplorer() {
   const cx = dim.w / 2;
   const cy = dim.h / 2;
 
-  // Elliptical radii for each ring (fills the rectangular canvas)
-  const marginX = 60;
-  const marginY = 45;
+  // Tighter margins → more space for nodes
+  const marginX = 28;
+  const marginY = 22;
+
   const getRingRadii = (frac) => ({
     rx: (dim.w / 2 - marginX) * frac,
     ry: (dim.h / 2 - marginY) * frac,
   });
 
-  // Node visual size scaled with canvas
-  const baseSize = Math.min(dim.w, dim.h) / 75;
-  const nodeR = (ring) => Math.max(5, baseSize * (ring === 0 ? 2.2 : ring === 1 ? 1.8 : 1.4));
+  // Larger nodes: divisor 55 vs former 75
+  const baseSize = Math.min(dim.w, dim.h) / 55;
+  const nodeR = (ring) => Math.max(7, baseSize * (ring === 0 ? 2.5 : ring === 1 ? 2.0 : 1.6));
 
   // Font sizes scaled with canvas
   const fs = {
-    tiny:   Math.max(9,  Math.min(12, dim.w / 130)),
-    small:  Math.max(10, Math.min(13.5, dim.w / 110)),
-    medium: Math.max(12, Math.min(16, dim.w / 90)),
-    large:  Math.max(14, Math.min(19, dim.w / 75)),
-    center: Math.max(13, Math.min(17, dim.w / 85)),
+    tiny:   Math.max(9,  Math.min(12, dim.w / 120)),
+    small:  Math.max(11, Math.min(14.5, dim.w / 95)),
+    medium: Math.max(12, Math.min(17, dim.w / 80)),
+    large:  Math.max(14, Math.min(20, dim.w / 65)),
+    center: Math.max(13, Math.min(18, dim.w / 80)),
   };
 
   const sectorColor = (key) => SECTORS[key]?.color || '#888';
   const centerSector = sectorColor(constellationData.sector);
 
-  // Get node positions using elliptical orbits
   const getPositions = (ringIdx) => {
     const nodes = constellationData.rings[ringIdx]?.nodes || [];
     const { rx, ry } = getRingRadii(RING_FRACTIONS[ringIdx]);
@@ -262,78 +312,162 @@ export default function LawExplorer() {
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
       fontFamily: 'system-ui, -apple-system, sans-serif', color: '#E8E6E1',
     }}>
-      {/* ── Top bar ──────────────────────────────────── */}
+      {/* CSS animations */}
+      <style>{`
+        @keyframes panelIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        .depth-btn:hover { filter: brightness(1.2); }
+        .action-btn:hover { filter: brightness(1.15); }
+      `}</style>
+
+      {/* ── Top bar ─────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 20px', flexShrink: 0,
+        padding: isMobile ? '8px 12px' : '10px 20px', flexShrink: 0,
         opacity: entered ? 1 : 0, transition: 'opacity 0.4s',
       }}>
-        {/* Left: back + title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <a href="/" style={{ fontSize: 11, color: '#555', letterSpacing: 1.5, textTransform: 'uppercase', textDecoration: 'none' }}>
+        {/* Left: back + law title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+          <a href="/" style={{
+            fontSize: 11, color: '#555', letterSpacing: 1.5, textTransform: 'uppercase',
+            textDecoration: 'none', flexShrink: 0,
+          }}>
             ← Accueil
           </a>
-          <span style={{ color: '#222' }}>|</span>
-          <span style={{ fontSize: 12, color: '#888', maxWidth: 280, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-            {lawQuery.length > 60 ? lawQuery.slice(0, 58) + '…' : lawQuery}
-          </span>
+          {!isMobile && (
+            <>
+              <span style={{ color: '#1E1E28' }}>|</span>
+              <span style={{
+                fontSize: 12, color: '#666', overflow: 'hidden',
+                whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+              }}>
+                {lawQuery.length > 55 ? lawQuery.slice(0, 53) + '…' : lawQuery}
+              </span>
+            </>
+          )}
         </div>
 
-        {/* Right: depth + sector legend */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* Sector dots legend */}
-          <div style={{ display: 'none', gap: 10, alignItems: 'center' }} className="legend-desktop">
-            {Object.entries(SECTORS).map(([k, s]) => (
-              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
-                <span style={{ fontSize: 9, color: '#555', fontFamily: 'monospace' }}>{s.label}</span>
-              </div>
-            ))}
-          </div>
-          {/* Depth control */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 10, color: '#555', fontFamily: 'monospace' }}>Profondeur</span>
-            <div style={{ display: 'flex', background: '#111118', borderRadius: 8, padding: 3, gap: 2 }}>
-              {[1, 2, 3].map((v) => (
-                <button key={v} onClick={() => { setDepth(v); setSelectedNode(null); }} style={{
-                  padding: '5px 12px', border: 'none', borderRadius: 5, cursor: 'pointer',
-                  fontSize: 11, fontFamily: 'monospace',
-                  background: depth >= v ? `${centerSector}25` : 'transparent',
-                  color: depth >= v ? centerSector : '#444',
-                  transition: 'all 0.2s',
-                }}>
-                  {v}
-                </button>
-              ))}
+        {/* Right: visual depth slider + change */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14, flexShrink: 0 }}>
+
+          {/* ── Visual Depth Slider ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            {/* Ring icon buttons connected by a track */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {[1, 2, 3].map((v, i) => {
+                const active = depth >= v;
+                const btnSize = isMobile ? 28 : 34;
+                const svgSize = isMobile ? 18 : 22;
+                return (
+                  <span key={v} style={{ display: 'flex', alignItems: 'center' }}>
+                    {/* Connector line between buttons */}
+                    {i > 0 && (
+                      <div style={{
+                        width: isMobile ? 14 : 20,
+                        height: 2,
+                        background: depth >= v ? centerSector : '#252530',
+                        transition: 'background 0.3s ease',
+                        borderRadius: 1,
+                      }} />
+                    )}
+                    <button
+                      className="depth-btn"
+                      onClick={() => { setDepth(v); setPanelNode(null); setPanelLocked(false); }}
+                      title={RING_LABELS[v - 1]}
+                      style={{
+                        width: btnSize, height: btnSize,
+                        borderRadius: '50%', border: 'none', cursor: 'pointer', padding: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: active ? `${centerSector}18` : '#0E0E18',
+                        outline: `1.5px solid ${active ? centerSector + '55' : '#282832'}`,
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {/* Mini constellation icon: more rings per button level */}
+                      <svg width={svgSize} height={svgSize} viewBox="0 0 22 22">
+                        {/* Center dot */}
+                        <circle cx={11} cy={11} r={1.5}
+                          fill={active ? centerSector : '#555'} />
+                        {/* Ring 1 always shown */}
+                        <circle cx={11} cy={11} r={5} fill="none"
+                          stroke={active ? centerSector : '#444'}
+                          strokeWidth={1.2}
+                          opacity={active ? 0.75 : 0.3} />
+                        {/* Ring 2 on buttons 2 & 3 */}
+                        {v >= 2 && (
+                          <circle cx={11} cy={11} r={8} fill="none"
+                            stroke={depth >= 2 ? centerSector : '#333'}
+                            strokeWidth={0.9}
+                            opacity={depth >= 2 ? 0.55 : 0.2} />
+                        )}
+                        {/* Ring 3 on button 3 only */}
+                        {v >= 3 && (
+                          <circle cx={11} cy={11} r={10.5} fill="none"
+                            stroke={depth >= 3 ? centerSector : '#282832'}
+                            strokeWidth={0.7}
+                            opacity={depth >= 3 ? 0.4 : 0.15} />
+                        )}
+                      </svg>
+                    </button>
+                  </span>
+                );
+              })}
             </div>
+            {/* Current ring label */}
+            <span style={{
+              fontSize: isMobile ? 7 : 8, color: '#555', fontFamily: 'monospace',
+              letterSpacing: 0.3, maxWidth: 130, textAlign: 'center', lineHeight: 1.2,
+            }}>
+              {RING_LABELS[depth - 1]}
+            </span>
           </div>
+
           {/* Change law */}
           <a href="/explorer" style={{
             fontSize: 10, color: '#666', textDecoration: 'none', fontFamily: 'monospace',
-            padding: '5px 10px', borderRadius: 6, border: '1px solid #222',
-            transition: 'color 0.2s, border-color 0.2s',
+            padding: '5px 10px', borderRadius: 6, border: '1px solid #1E1E28',
+            transition: 'color 0.2s, border-color 0.2s', whiteSpace: 'nowrap',
           }}>
             Changer ↩
           </a>
         </div>
       </div>
 
-      {/* ── Sector legend (visible on desktop) ─────────── */}
+      {/* ── Sector legend — dots plus visibles ─────────── */}
       <div style={{
-        display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap',
-        padding: '0 20px 8px', flexShrink: 0,
-        opacity: entered ? 0.8 : 0, transition: 'opacity 0.5s 0.2s',
+        display: 'flex', justifyContent: 'center', gap: isMobile ? 8 : 18, flexWrap: 'wrap',
+        padding: isMobile ? '0 10px 5px' : '0 20px 8px', flexShrink: 0,
+        opacity: entered ? 1 : 0, transition: 'opacity 0.5s 0.2s',
       }}>
         {Object.entries(SECTORS).map(([k, s]) => (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color }} />
-            <span style={{ fontSize: fs.tiny, color: '#666', fontFamily: 'monospace' }}>{s.label}</span>
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{
+              width: isMobile ? 7 : 9,
+              height: isMobile ? 7 : 9,
+              borderRadius: '50%',
+              background: s.color,
+              boxShadow: `0 0 7px ${s.color}70`,
+              flexShrink: 0,
+            }} />
+            <span style={{
+              fontSize: isMobile ? 9 : fs.tiny + 0.5,
+              color: '#888',
+              fontFamily: 'monospace',
+              letterSpacing: 0.3,
+            }}>
+              {s.label}
+            </span>
           </div>
         ))}
       </div>
 
       {/* ── SVG Map ─────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 0 }}>
+      <div style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative', minHeight: 0,
+      }}>
         <svg
           ref={svgRef}
           width={dim.w}
@@ -343,12 +477,12 @@ export default function LawExplorer() {
         >
           <defs>
             <radialGradient id="cGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor={centerSector} stopOpacity="0.15" />
+              <stop offset="0%" stopColor={centerSector} stopOpacity="0.18" />
               <stop offset="100%" stopColor={centerSector} stopOpacity="0" />
             </radialGradient>
             {Object.entries(SECTORS).map(([k, s]) => (
               <radialGradient key={k} id={`ng-${k}`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={s.color} stopOpacity="0.4" />
+                <stop offset="0%" stopColor={s.color} stopOpacity="0.45" />
                 <stop offset="100%" stopColor={s.color} stopOpacity="0" />
               </radialGradient>
             ))}
@@ -357,38 +491,58 @@ export default function LawExplorer() {
           {/* Center ambient glow */}
           <ellipse
             cx={cx} cy={cy}
-            rx={(dim.w / 2 - marginX) * 0.18}
-            ry={(dim.h / 2 - marginY) * 0.22}
+            rx={(dim.w / 2 - marginX) * 0.16}
+            ry={(dim.h / 2 - marginY) * 0.20}
             fill="url(#cGlow)"
           />
 
           {/* Orbit ellipses */}
           {RING_FRACTIONS.map((frac, i) => {
             const { rx, ry } = getRingRadii(frac);
+            const isActive = i < depth;
             return (
               <ellipse
                 key={i} cx={cx} cy={cy} rx={rx} ry={ry}
                 fill="none"
                 stroke="#fff"
-                strokeOpacity={i < depth ? 0.055 : 0.018}
-                strokeWidth={1}
-                strokeDasharray="3 8"
-                style={{ transition: 'stroke-opacity 0.5s' }}
+                strokeOpacity={isActive ? 0.07 : 0.02}
+                strokeWidth={isActive ? 1.2 : 0.7}
+                strokeDasharray="4 9"
+                style={{ transition: 'stroke-opacity 0.5s, stroke-width 0.3s' }}
               />
+            );
+          })}
+
+          {/* Ring number indicators on orbit ellipses */}
+          {RING_FRACTIONS.map((frac, i) => {
+            if (i >= depth) return null;
+            const { rx, ry } = getRingRadii(frac);
+            // Place at top-right of the ellipse
+            const angle = -Math.PI / 5;
+            const lx = cx + rx * Math.cos(angle) + 5;
+            const ly = cy + ry * Math.sin(angle) - 4;
+            return (
+              <text key={`ri-${i}`} x={lx} y={ly}
+                fill={centerSector} fontSize={fs.tiny - 1}
+                fontFamily="monospace" opacity={0.3}
+                style={{ pointerEvents: 'none' }}
+              >
+                {i + 1}
+              </text>
             );
           })}
 
           {/* Connection lines */}
           {visibleNodes.map((n) => {
-            const active = hoveredId === n.id || selectedNode?.id === n.id;
+            const active = hoveredId === n.id || panelNode?.id === n.id;
             const sc = sectorColor(n.sector);
             return (
               <line
                 key={`l-${n.id}`}
                 x1={cx} y1={cy} x2={n.x} y2={n.y}
                 stroke={sc}
-                strokeOpacity={active ? 0.22 : 0.05}
-                strokeWidth={active ? 1.5 : 0.6}
+                strokeOpacity={active ? 0.28 : 0.07}
+                strokeWidth={active ? 1.6 : 0.7}
                 style={{ transition: 'all 0.25s' }}
               />
             );
@@ -398,58 +552,74 @@ export default function LawExplorer() {
           {visibleNodes.map((n) => {
             const sc = sectorColor(n.sector);
             const r = nodeR(n.ring);
-            const active = hoveredId === n.id || selectedNode?.id === n.id;
+            const active = hoveredId === n.id || panelNode?.id === n.id;
+            const locked = panelLocked && panelNode?.id === n.id;
             const showLabel = active || showLabelAlways(n);
-            const shortTitle = n.title?.length > 22 ? n.title.slice(0, 20) + '…' : n.title;
-            const labelY = n.y > cy ? n.y + r + fs.small + 3 : n.y - r - 5;
-            const labelAnchor = 'middle';
+            const shortTitle = n.title?.length > 24 ? n.title.slice(0, 22) + '…' : n.title;
+            const labelY = n.y > cy ? n.y + r + fs.small + 5 : n.y - r - 7;
 
             return (
               <g
                 key={n.id}
                 style={{ cursor: 'pointer' }}
-                onMouseEnter={() => setHoveredId(n.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => setSelectedNode(selectedNode?.id === n.id ? null : n)}
+                onMouseEnter={() => handleNodeEnter(n)}
+                onMouseLeave={() => handleNodeLeave()}
+                onClick={() => handleNodeClick(n)}
               >
                 {/* Hover glow */}
                 <circle
-                  cx={n.x} cy={n.y} r={r * 3.5}
+                  cx={n.x} cy={n.y} r={r * 4}
                   fill={`url(#ng-${n.sector})`}
-                  opacity={active ? 0.75 : 0}
+                  opacity={active ? 0.85 : 0}
                   style={{ transition: 'opacity 0.2s', pointerEvents: 'none' }}
                 />
-                {/* Circle */}
+                {/* Outer ring (locked indicator) */}
+                {locked && (
+                  <circle
+                    cx={n.x} cy={n.y} r={r * 1.9}
+                    fill="none"
+                    stroke={sc}
+                    strokeOpacity={0.25}
+                    strokeWidth={1}
+                    strokeDasharray="3 4"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )}
+                {/* Main circle */}
                 <circle
                   cx={n.x} cy={n.y}
-                  r={active ? r * 1.35 : r}
-                  fill={active ? sc + '1A' : '#0C0C14'}
+                  r={active ? r * 1.4 : r}
+                  fill={active ? sc + '1C' : '#0C0C14'}
                   stroke={sc}
-                  strokeOpacity={active ? 0.9 : 0.35}
-                  strokeWidth={active ? 1.8 : 1.2}
+                  strokeOpacity={active ? 0.95 : 0.42}
+                  strokeWidth={active ? 2.2 : 1.5}
                   style={{ transition: 'all 0.2s ease-out' }}
                 />
                 {/* Inner dot */}
-                <circle cx={n.x} cy={n.y} r={r * 0.35} fill={sc} opacity={active ? 1 : 0.6} style={{ transition: 'opacity 0.2s' }} />
+                <circle
+                  cx={n.x} cy={n.y} r={r * 0.36}
+                  fill={sc}
+                  opacity={active ? 1 : 0.65}
+                  style={{ transition: 'opacity 0.2s' }}
+                />
 
                 {/* Label */}
                 {showLabel && (
                   <>
-                    {/* Label background pill */}
                     <rect
-                      x={n.x - Math.min(shortTitle.length * (fs.small * 0.52), 100)}
+                      x={n.x - Math.min(shortTitle.length * (fs.small * 0.52), 115)}
                       y={labelY - fs.small}
-                      width={Math.min(shortTitle.length * (fs.small * 1.04), 200)}
-                      height={fs.small * 1.6}
+                      width={Math.min(shortTitle.length * (fs.small * 1.04), 230)}
+                      height={fs.small * 1.75}
                       rx={4}
-                      fill={active ? 'rgba(8,8,13,0.95)' : 'rgba(8,8,13,0.75)'}
-                      stroke={active ? sc + '40' : 'none'}
+                      fill={active ? 'rgba(8,8,13,0.97)' : 'rgba(8,8,13,0.82)'}
+                      stroke={active ? sc + '48' : 'none'}
                       strokeWidth={0.5}
                     />
                     <text
                       x={n.x}
                       y={labelY}
-                      textAnchor={labelAnchor}
+                      textAnchor="middle"
                       fill={active ? '#E8E6E1' : '#999'}
                       fontSize={fs.small}
                       fontFamily="system-ui, sans-serif"
@@ -466,17 +636,15 @@ export default function LawExplorer() {
 
           {/* ── Center node ────────────────────────────── */}
           <g>
-            {/* Center glow disk */}
             <ellipse
               cx={cx} cy={cy}
-              rx={(dim.w / 2 - marginX) * 0.09}
-              ry={(dim.h / 2 - marginY) * 0.12}
-              fill={centerSector + '12'}
+              rx={(dim.w / 2 - marginX) * 0.105}
+              ry={(dim.h / 2 - marginY) * 0.135}
+              fill={centerSector + '14'}
               stroke={centerSector}
-              strokeOpacity={0.4}
-              strokeWidth={1.5}
+              strokeOpacity={0.45}
+              strokeWidth={1.6}
             />
-            {/* Center text */}
             <text
               x={cx} y={cy - fs.center * 0.5}
               textAnchor="middle"
@@ -488,102 +656,124 @@ export default function LawExplorer() {
               {lawQuery.length > 28 ? lawQuery.slice(0, 26) + '…' : lawQuery}
             </text>
             <text
-              x={cx} y={cy + fs.center * 1.1}
+              x={cx} y={cy + fs.center * 1.15}
               textAnchor="middle"
               fill="#555"
               fontSize={fs.tiny}
               fontFamily="monospace"
               letterSpacing={1}
             >
-              {RING_LABELS[depth - 1].toUpperCase()}
+              {(SECTORS[constellationData.sector]?.label || constellationData.sector).toUpperCase()}
             </text>
           </g>
         </svg>
 
-        {/* ── Detail panel ─────────────────────────────── */}
-        {selectedNode && (() => {
-          const sc = sectorColor(selectedNode.sector);
-          const secLabel = SECTORS[selectedNode.sector]?.label || selectedNode.sector;
+        {/* ── Detail panel (hover + click) ─────────────── */}
+        {panelNode && (() => {
+          const sc = sectorColor(panelNode.sector);
+          const secLabel = SECTORS[panelNode.sector]?.label || panelNode.sector;
           return (
-            <div style={{
-              position: 'absolute', bottom: 16, left: '50%',
-              transform: 'translateX(-50%)',
-              background: 'rgba(8,8,13,0.97)',
-              border: `1px solid ${sc}35`,
-              borderRadius: 16, padding: '18px 22px',
-              maxWidth: 420, width: 'calc(100% - 32px)',
-              backdropFilter: 'blur(20px)',
-              boxShadow: `0 16px 48px rgba(0,0,0,0.7), 0 0 28px ${sc}08`,
-              animation: 'panelIn 0.22s ease-out',
-              zIndex: 10,
-            }}>
-              <style>{`
-                @keyframes panelIn {
-                  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-                  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-                }
-              `}</style>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: sc }} />
+            <div
+              onMouseEnter={handlePanelEnter}
+              onMouseLeave={handlePanelLeave}
+              style={{
+                position: 'absolute', bottom: 16, left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(8,8,13,0.97)',
+                border: `1px solid ${sc}38`,
+                borderRadius: 16, padding: '18px 22px',
+                maxWidth: 440, width: 'calc(100% - 32px)',
+                backdropFilter: 'blur(20px)',
+                boxShadow: `0 16px 48px rgba(0,0,0,0.75), 0 0 32px ${sc}0C`,
+                animation: 'panelIn 0.22s ease-out',
+                zIndex: 10,
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <div style={{
+                    width: 9, height: 9, borderRadius: '50%',
+                    background: sc, boxShadow: `0 0 8px ${sc}90`, flexShrink: 0,
+                  }} />
                   <span style={{ fontSize: 10, color: sc, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: 1.5 }}>
                     {secLabel}
                   </span>
                   <span style={{ fontSize: 9, color: '#444', fontFamily: 'monospace' }}>
-                    · {RING_LABELS[selectedNode.ring]}
+                    · {RING_LABELS[panelNode.ring]}
                   </span>
+                  {panelLocked && (
+                    <span style={{
+                      fontSize: 8, color: '#555', fontFamily: 'monospace',
+                      background: '#ffffff08', padding: '2px 6px', borderRadius: 4,
+                      border: '1px solid #ffffff10',
+                    }}>
+                      ÉPINGLÉ
+                    </span>
+                  )}
                 </div>
-                <button onClick={() => setSelectedNode(null)} style={{
-                  background: 'none', border: 'none', color: '#555', cursor: 'pointer',
-                  fontSize: 20, padding: 0, lineHeight: 1, marginLeft: 8,
-                }}>×</button>
+                <button
+                  onClick={() => { setPanelNode(null); setPanelLocked(false); }}
+                  style={{
+                    background: 'none', border: 'none', color: '#555', cursor: 'pointer',
+                    fontSize: 20, padding: 0, lineHeight: 1, marginLeft: 8, flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
               </div>
 
+              {/* Title */}
               <div style={{ fontSize: 17, fontWeight: 600, color: '#E8E6E1', marginBottom: 8, lineHeight: 1.35 }}>
-                {selectedNode.title}
-              </div>
-              <div style={{ fontSize: 13, color: '#8A8880', lineHeight: 1.65, marginBottom: 16 }}>
-                {selectedNode.summary}
+                {panelNode.title}
               </div>
 
+              {/* Summary */}
+              <div style={{ fontSize: 13, color: '#8A8880', lineHeight: 1.65, marginBottom: 16 }}>
+                {panelNode.summary}
+              </div>
+
+              {/* Action buttons */}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  onClick={() => { window.location.href = `/?loi=${encodeURIComponent(selectedNode.title)}&mode=analyse`; }}
+                  className="action-btn"
+                  onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=analyse`; }}
                   style={{
                     flex: 1, padding: '10px 14px', border: `1px solid ${sc}40`,
                     borderRadius: 9, background: `${sc}14`, color: sc,
                     fontSize: 12, fontFamily: 'monospace', cursor: 'pointer',
                     transition: 'background 0.2s',
                   }}
-                  onMouseEnter={e => e.target.style.background = `${sc}28`}
-                  onMouseLeave={e => e.target.style.background = `${sc}14`}
+                  onMouseEnter={e => e.currentTarget.style.background = `${sc}28`}
+                  onMouseLeave={e => e.currentTarget.style.background = `${sc}14`}
                 >
-                  Analyser cette loi →
+                  Analyser →
                 </button>
                 <button
-                  onClick={() => { window.location.href = `/?loi=${encodeURIComponent(selectedNode.title)}&mode=debate`; }}
+                  className="action-btn"
+                  onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=debate`; }}
                   style={{
                     padding: '10px 14px', border: '1px solid #ffffff10',
                     borderRadius: 9, background: '#ffffff06', color: '#888',
                     fontSize: 12, fontFamily: 'monospace', cursor: 'pointer',
                     transition: 'background 0.2s',
                   }}
-                  onMouseEnter={e => e.target.style.background = '#ffffff14'}
-                  onMouseLeave={e => e.target.style.background = '#ffffff06'}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ffffff14'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#ffffff06'}
                 >
                   Débattre ⚔
                 </button>
                 <button
-                  onClick={() => { window.location.href = `/explorer?loi=${encodeURIComponent(selectedNode.title)}`; }}
+                  className="action-btn"
+                  onClick={() => { window.location.href = `/explorer?loi=${encodeURIComponent(panelNode.title)}`; }}
                   style={{
-                    padding: '10px 14px', border: `1px solid #8B6BEF25`,
+                    padding: '10px 14px', border: '1px solid #8B6BEF28',
                     borderRadius: 9, background: '#8B6BEF0A', color: '#8B6BEF',
                     fontSize: 12, fontFamily: 'monospace', cursor: 'pointer',
                     transition: 'background 0.2s',
                   }}
-                  onMouseEnter={e => e.target.style.background = '#8B6BEF18'}
-                  onMouseLeave={e => e.target.style.background = '#8B6BEF0A'}
+                  onMouseEnter={e => e.currentTarget.style.background = '#8B6BEF1C'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#8B6BEF0A'}
                 >
                   ↻ Explorer
                 </button>
