@@ -14,8 +14,8 @@ export default function Confidentialite() {
 
       <Section title="1. Responsable du traitement">
         <p><strong>Butterflygov</strong></p>
-        <p>SIREN : [SIREN]</p>
-        <p>Siège social : [ADRESSE_SIEGE]</p>
+        <p>SIREN : En cours d'immatriculation</p>
+        <p>Siège social : France</p>
         <p>Contact DPO : <a href="mailto:privacy@butterflygov.com" className="text-blue-400 hover:text-blue-300">privacy@butterflygov.com</a></p>
       </Section>
 
@@ -149,7 +149,7 @@ export default function Confidentialite() {
 
       <Section title="11. Contact">
         <p><strong>Email</strong> : <a href="mailto:privacy@butterflygov.com" className="text-blue-400 hover:text-blue-300">privacy@butterflygov.com</a></p>
-        <p><strong>Courrier</strong> : Butterflygov — [ADRESSE_SIEGE]</p>
+        <p><strong>Courrier</strong> : Butterflygov — contact@butterflygov.com</p>
       </Section>
     </LegalLayout>
   )

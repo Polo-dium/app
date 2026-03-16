@@ -11,11 +11,10 @@ export default function MentionsLegales() {
 
       <Section title="Éditeur du site">
         <p><strong>Butterflygov</strong></p>
-        <p>Forme juridique : [FORME_JURIDIQUE — ex : SAS, EURL, micro-entreprise]</p>
-        <p>SIREN : [SIREN]</p>
-        <p>Siège social : [ADRESSE_SIEGE]</p>
-        <p>Numéro de TVA intracommunautaire : [TVA_INTRA — si applicable]</p>
-        <p>Directeur de la publication : Paul [NOM_DE_FAMILLE]</p>
+        <p>Forme juridique : Micro-entreprise</p>
+        <p>SIREN : En cours d'immatriculation</p>
+        <p>Siège social : France</p>
+        <p>Directeur de la publication : Paul Boutaud</p>
         <p>Contact : <a href="mailto:contact@butterflygov.com" className="text-blue-400 hover:text-blue-300">contact@butterflygov.com</a></p>
       </Section>
 

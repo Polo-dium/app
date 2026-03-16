@@ -12,7 +12,7 @@ export default function CGU() {
       <h2 className="text-2xl font-bold text-white mb-6">Partie 1 — Conditions Générales d'Utilisation (CGU)</h2>
 
       <Section title="Article 1 — Objet">
-        <p>Les présentes Conditions Générales d'Utilisation régissent l'accès et l'utilisation du site butterflygov.com (ci-après « le Service »), édité par Butterflygov, SIREN [SIREN], dont le siège social est situé au [ADRESSE_SIEGE] (ci-après « l'Éditeur »).</p>
+        <p>Les présentes Conditions Générales d'Utilisation régissent l'accès et l'utilisation du site butterflygov.com (ci-après « le Service »), édité par Butterflygov, micro-entreprise en cours d'immatriculation, domiciliée en France (ci-après « l'Éditeur »).</p>
         <p className="mt-2">Toute utilisation du Service implique l'acceptation pleine et entière des présentes CGU.</p>
       </Section>
 
@@ -109,7 +109,7 @@ export default function CGU() {
 
       <Section title="Article 12 — Droit applicable et litiges">
         <p>Les présentes CGU sont soumises au droit français. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, les tribunaux de [VILLE_TRIBUNAL] seront seuls compétents.</p>
-        <p className="mt-2">Conformément aux dispositions du Code de la consommation, l'utilisateur peut recourir à un médiateur de la consommation. Le médiateur compétent est : [NOM_MEDIATEUR — à compléter, ex : Médiation de la consommation — www.mediation-conso.fr]</p>
+        <p className="mt-2">Conformément aux dispositions du Code de la consommation, l'utilisateur peut recourir à un médiateur de la consommation. Le médiateur compétent sera communiqué lors de la mise en place des abonnements payants.</p>
       </Section>
 
       <div className="my-10 border-t border-white/10" />

@@ -1054,12 +1054,19 @@ function ButterflyApp() {
     }
   }
 
+  const stripeEnabled = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
   const handleUpgrade = async () => {
+    if (!stripeEnabled) {
+      setError('Les abonnements Premium arrivent bientôt ! 🚀 Revenez dans quelques jours.')
+      return
+    }
     const token = await getAccessToken()
     if (!token) { setShowAuthModal(true); return }
     const response = await fetch('/api/stripe/create-checkout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } })
     const data = await response.json()
     if (data.url) window.location.href = data.url
+    else setError(data.error || 'Erreur lors de la création du lien de paiement')
   }
   
   const reset = () => { setLawText(''); setLaw1Text(''); setLaw2Text(''); setResult(null); setDebateResult(null); setExplainText(''); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null); setRateLimitExceeded(null) }
@@ -1138,7 +1145,7 @@ function ButterflyApp() {
                     <div className="text-center p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
                       <Lock className="w-6 h-6 mx-auto mb-2 text-yellow-400" />
                       <p className="text-sm text-yellow-200">Le Mode Débat est réservé aux abonnés Premium</p>
-                      <Button onClick={handleUpgrade} className="mt-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black"><Crown className="w-4 h-4 mr-2" />Passer Premium - 2,99€/mois</Button>
+                      <Button onClick={handleUpgrade} className={`mt-2 ${stripeEnabled ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-black' : 'bg-white/10 text-white/60 cursor-default'}`}><Crown className="w-4 h-4 mr-2" />{stripeEnabled ? 'Passer Premium - 2,99€/mois' : '✨ Premium — Bientôt disponible'}</Button>
                     </div>
                   )}
                   <label className="block text-center text-xl text-white/80">Comparez deux propositions de loi</label>
