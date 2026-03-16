@@ -2,13 +2,13 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Facebook, Instagram, Copy, Download, Check, Wrench, BookOpen, Network } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, Swords, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import html2canvas from 'html2canvas'
+
 import confetti from 'canvas-confetti'
 import { createClient } from '@/lib/supabase/client'
 import { getDailyLaws } from '@/lib/daily-laws'
@@ -282,129 +282,6 @@ function UserMenu() {
           </div>
         </motion.div>
       )}
-    </div>
-  )
-}
-
-// Share Buttons Component
-function ShareButtons({ cardRef, lawText, result }) {
-  const [copied, setCopied] = useState(false)
-  const appUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
-  
-  const captureAndDownload = async () => {
-    if (!cardRef.current) return
-    const canvas = await html2canvas(cardRef.current, { backgroundColor: '#111111', scale: 2 })
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'butterfly-gov-score.png'
-        a.click()
-        URL.revokeObjectURL(url)
-        resolve(blob)
-      })
-    })
-  }
-  
-  const shareOnX = async () => {
-    await captureAndDownload()
-    const tweetText = encodeURIComponent(
-      `🦋 J'ai passé la loi "${lawText.substring(0, 50)}${lawText.length > 50 ? '...' : ''}" sur Butterfly.gov\n\n` +
-      `📊 Mon score présidentiel:\n💰 Économie: ${result.scores.economy}/100\n❤️ Social: ${result.scores.social}/100\n🌿 Écologie: ${result.scores.ecology}/100\n\nTentez de faire mieux ! 👇\n${appUrl}`
-    )
-    window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, '_blank')
-  }
-  
-  const shareOnFacebook = async () => {
-    await captureAndDownload()
-    const shareUrl = encodeURIComponent(appUrl)
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}&quote=${encodeURIComponent(`J'ai testé ma loi "${lawText}" sur Butterfly.gov ! Score: ${result.scores.overall}/100`)}`, '_blank')
-  }
-  
-  const shareOnInstagram = async () => {
-    await captureAndDownload()
-    alert('📸 Image téléchargée !\n\nOuvrez Instagram et partagez l\'image depuis votre galerie avec le hashtag #ButterflyGov')
-  }
-  
-  const copyToClipboard = async () => {
-    const text = `🦋 Ma loi sur Butterfly.gov: "${lawText}"\n\n📊 Scores:\n💰 Économie: ${result.scores.economy}/100\n❤️ Social: ${result.scores.social}/100\n🌿 Écologie: ${result.scores.ecology}/100\n⭐ Global: ${result.scores.overall}/100\n\n${appUrl}`
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  
-  return (
-    <div className="flex flex-wrap justify-center gap-2">
-      <Button onClick={shareOnX} className="bg-black hover:bg-gray-900 border border-white/20"><XIcon className="w-4 h-4 mr-2" />X / Twitter</Button>
-      <Button onClick={shareOnFacebook} className="bg-blue-600 hover:bg-blue-500"><Facebook className="w-4 h-4 mr-2" />Facebook</Button>
-      <Button onClick={shareOnInstagram} className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:opacity-90"><Instagram className="w-4 h-4 mr-2" />Instagram</Button>
-      <Button onClick={captureAndDownload} variant="outline" className="border-white/20 hover:bg-white/10"><Download className="w-4 h-4 mr-2" />Télécharger</Button>
-      <Button onClick={copyToClipboard} variant="outline" className="border-white/20 hover:bg-white/10">{copied ? <Check className="w-4 h-4 mr-2 text-green-400" /> : <Copy className="w-4 h-4 mr-2" />}{copied ? 'Copié !' : 'Copier'}</Button>
-    </div>
-  )
-}
-
-// Debate Share Buttons Component
-function DebateShareButtons({ cardRef, law1Text, law2Text, debateResult }) {
-  const [copied, setCopied] = useState(false)
-  const appUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '')
-
-  const captureAndDownload = async () => {
-    if (!cardRef.current) return
-    const canvas = await html2canvas(cardRef.current, { backgroundColor: '#111111', scale: 2 })
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'butterfly-gov-debat.png'
-        a.click()
-        URL.revokeObjectURL(url)
-        resolve(blob)
-      })
-    })
-  }
-
-  const s1 = debateResult.law1.analysis.scores.overall
-  const s2 = debateResult.law2.analysis.scores.overall
-  const winner = s1 > s2 ? `LOI A (${s1}/100)` : s2 > s1 ? `LOI B (${s2}/100)` : 'ÉGALITÉ'
-
-  const shareOnX = async () => {
-    await captureAndDownload()
-    const text = encodeURIComponent(
-      `⚔️ J'ai comparé deux lois sur Butterfly.gov !\n\n` +
-      `🔵 "${law1Text.substring(0, 40)}${law1Text.length > 40 ? '...' : ''}" → ${s1}/100\n` +
-      `🔴 "${law2Text.substring(0, 40)}${law2Text.length > 40 ? '...' : ''}" → ${s2}/100\n\n` +
-      `🏆 Gagnant : ${winner}\n\nFaites votre propre débat 👇\n${appUrl}`
-    )
-    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank')
-  }
-
-  const shareOnFacebook = async () => {
-    await captureAndDownload()
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(appUrl)}`, '_blank')
-  }
-
-  const shareOnInstagram = async () => {
-    await captureAndDownload()
-    alert('📸 Image téléchargée !\n\nOuvrez Instagram et partagez l\'image depuis votre galerie avec le hashtag #ButterflyGov')
-  }
-
-  const copyToClipboard = async () => {
-    const text = `⚔️ Débat Butterfly.gov\n\n🔵 LOI A: "${law1Text}"\n💰 ${debateResult.law1.analysis.scores.economy} | ❤️ ${debateResult.law1.analysis.scores.social} | 🌿 ${debateResult.law1.analysis.scores.ecology} | ⭐ ${s1}/100\n\n🔴 LOI B: "${law2Text}"\n💰 ${debateResult.law2.analysis.scores.economy} | ❤️ ${debateResult.law2.analysis.scores.social} | 🌿 ${debateResult.law2.analysis.scores.ecology} | ⭐ ${s2}/100\n\n🏆 ${winner}\n\n${appUrl}`
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <div className="flex flex-wrap justify-center gap-2">
-      <Button onClick={shareOnX} className="bg-black hover:bg-gray-900 border border-white/20"><XIcon className="w-4 h-4 mr-2" />X / Twitter</Button>
-      <Button onClick={shareOnFacebook} className="bg-blue-600 hover:bg-blue-500"><Facebook className="w-4 h-4 mr-2" />Facebook</Button>
-      <Button onClick={shareOnInstagram} className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:opacity-90"><Instagram className="w-4 h-4 mr-2" />Instagram</Button>
-      <Button onClick={captureAndDownload} variant="outline" className="border-white/20 hover:bg-white/10"><Download className="w-4 h-4 mr-2" />Télécharger</Button>
-      <Button onClick={copyToClipboard} variant="outline" className="border-white/20 hover:bg-white/10">{copied ? <Check className="w-4 h-4 mr-2 text-green-400" /> : <Copy className="w-4 h-4 mr-2" />}{copied ? 'Copié !' : 'Copier'}</Button>
     </div>
   )
 }
@@ -1237,7 +1114,6 @@ function ButterflyApp() {
               {mode === 'single' && result ? (
                 <>
                   <ResultCard result={result} lawText={lawText} cardRef={cardRef} />
-                  <ShareButtons cardRef={cardRef} lawText={lawText} result={result} />
                   <div className="flex justify-center gap-4 flex-wrap">
                     {user ? (
                       <Button onClick={() => setShowDebateChat(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500">
@@ -1248,7 +1124,7 @@ function ButterflyApp() {
                         <Lock className="w-3 h-3 mr-1.5" /><MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
                       </Button>
                     )}
-                    <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager</Button>
+                    <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager sur vos réseaux</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle loi</Button>
                   </div>
                 </>
@@ -1303,9 +1179,8 @@ function ButterflyApp() {
 </div>
                     </div>
                   </div>
-                  <DebateShareButtons cardRef={debateCardRef} law1Text={law1Text} law2Text={law2Text} debateResult={debateResult} />
                   <div className="flex justify-center gap-3 flex-wrap">
-                    <Button onClick={() => openSharePanel({ type: 'debat', proposition: law1Text, loi_a_titre: law1Text, loi_b_titre: law2Text, loi_a_scores: debateResult.law1.analysis.scores, loi_b_scores: debateResult.law2.analysis.scores, verdict: debateResult.verdict })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager</Button>
+                    <Button onClick={() => openSharePanel({ type: 'debat', proposition: law1Text, loi_a_titre: law1Text, loi_b_titre: law2Text, loi_a_scores: debateResult.law1.analysis.scores, loi_b_scores: debateResult.law2.analysis.scores, verdict: debateResult.verdict })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager sur vos réseaux</Button>
                     <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouveau débat</Button>
                   </div>
                 </>
