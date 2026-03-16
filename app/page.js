@@ -366,7 +366,7 @@ function ResultCard({ result, lawText, cardRef }) {
 }
 
 // Debate Summary Card
-function DebateSummaryCard({ data, onClose, onCopy, copied }) {
+function DebateSummaryCard({ data, onClose, onCopy, copied, onShare, shareCreating }) {
   const getScoreColor = (s) => (s ?? 50) >= 60 ? 'text-green-400' : (s ?? 50) >= 40 ? 'text-yellow-400' : 'text-red-400'
   const scoreKeys = [['💰','economy','Éco'],['❤️','social','Social'],['🌿','ecology','Écolo'],['⚙️','faisabilite','Faisab.']]
   return (
@@ -374,6 +374,7 @@ function DebateSummaryCard({ data, onClose, onCopy, copied }) {
       <div className="flex justify-between items-center">
         <p className="text-xs text-purple-400 uppercase font-semibold tracking-widest">📋 Résumé du débat</p>
         <div className="flex gap-2">
+          {onShare && <button onClick={onShare} disabled={shareCreating} className="text-xs text-white flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 transition-colors disabled:opacity-50">{shareCreating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}Partager</button>}
           <button onClick={onCopy} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors">{copied ? '✓ Copié' : 'Copier'}</button>
           <button onClick={onClose} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">Fermer ×</button>
         </div>
@@ -416,7 +417,7 @@ function DebateSummaryCard({ data, onClose, onCopy, copied }) {
 }
 
 // Debate Chat Modal - "L'Opposant Féroce"
-function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken, onUpgrade, onSignIn }) {
+function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken, onUpgrade, onSignIn, onShare, shareCreating }) {
   const isDebateMode = !!(law1 && law2)
 
   const DEF = { economy: 50, social: 50, ecology: 50, faisabilite: 50, overall: 50 }
@@ -633,11 +634,29 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
 
         {/* Main area: summary card OR chat messages */}
         <div className="flex-1 overflow-y-auto py-2">
-          {summaryMode && summaryData ? (
-            summaryData.raw
-              ? <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30"><div className="flex justify-between items-center mb-2"><p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé</p><div className="flex gap-2"><button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">{copied ? '✓ Copié' : 'Copier'}</button><button onClick={() => setSummaryMode(false)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">× Fermer</button></div></div><p className="text-sm text-white/90 whitespace-pre-wrap">{summaryData.raw}</p></div>
-              : <DebateSummaryCard data={summaryData} onClose={() => setSummaryMode(false)} onCopy={copySummary} copied={copied} />
-          ) : (
+          {summaryMode && summaryData ? (() => {
+            const sharePayload = isDebateMode ? {
+              type: 'debat',
+              proposition: law1,
+              loi_a_titre: law1,
+              loi_b_titre: law2,
+              loi_a_scores: summaryData.laws?.[0]?.scores || currentScores,
+              loi_b_scores: summaryData.laws?.[1]?.scores || law2Scores || currentScores,
+              verdict: summaryData.conclusion || summaryData.keyPoint || '',
+            } : {
+              type: 'analyse',
+              proposition: law,
+              score_global: currentScores.overall,
+              scores: currentScores,
+              gagnants: [],
+              perdants: [],
+              effet_papillon: summaryData.conclusion || summaryData.keyPoint || '',
+            }
+            const handleShare = onShare ? () => onShare(sharePayload) : null
+            return summaryData.raw
+              ? <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30"><div className="flex justify-between items-center mb-2"><p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé</p><div className="flex gap-2">{handleShare && <button onClick={handleShare} disabled={shareCreating} className="text-xs text-white flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 disabled:opacity-50">{shareCreating ? <Loader2 className="w-3 h-3 animate-spin inline mr-1"/> : <Share2 className="w-3 h-3 inline mr-1"/>}Partager</button>}<button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">{copied ? '✓ Copié' : 'Copier'}</button><button onClick={() => setSummaryMode(false)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">× Fermer</button></div></div><p className="text-sm text-white/90 whitespace-pre-wrap">{summaryData.raw}</p></div>
+              : <DebateSummaryCard data={summaryData} onClose={() => setSummaryMode(false)} onCopy={copySummary} copied={copied} onShare={handleShare} shareCreating={shareCreating} />
+          })() : (
             <div className="space-y-4 py-2">
               {firstMsgLoading && (
                 <div className="flex justify-start">
@@ -990,7 +1009,7 @@ function ButterflyApp() {
       {rateLimitExceeded && <SoftWall userTier={rateLimitExceeded.userTier} resetAt={rateLimitExceeded.resetAt} onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }} onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }} />}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
       {sharePanel && <SharePanel shareId={sharePanel.shareId} proposition={sharePanel.proposition} scoreGlobal={sharePanel.scoreGlobal} onClose={() => setSharePanel(null)} />}
-      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} />
+      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={mode === 'debate' ? null : lawText} law1={mode === 'debate' ? law1Text : null} law2={mode === 'debate' ? law2Text : null} law1Scores={debateResult?.law1?.analysis?.scores} law2Scores={debateResult?.law2?.analysis?.scores} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} onShare={openSharePanel} shareCreating={shareCreating} />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
