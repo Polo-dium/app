@@ -1070,9 +1070,14 @@ function ButterflyApp() {
 
               {mode === 'explore' && (
                 <div className="space-y-3">
-                  <p className="text-sm text-center text-muted-foreground">Textes législatifs réels — Assemblée Nationale & Sénat</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">Textes en cours — Assemblée & Sénat</p>
+                    <button onClick={() => setProposalSeed(s => s + 1)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors px-2 py-1 rounded-full hover:bg-white/10">
+                      <RefreshCw className="w-3 h-3" />Voir d'autres
+                    </button>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {getDailyExplorerLaws().map((law) => (
+                    {getDailyExplorerLaws(proposalSeed).map((law) => (
                       <ExplorerLawCard key={law.id} law={law} onClick={(query) => setExploreText(query)} />
                     ))}
                   </div>
