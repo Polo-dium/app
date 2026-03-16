@@ -12,6 +12,7 @@ import html2canvas from 'html2canvas'
 import confetti from 'canvas-confetti'
 import { createClient } from '@/lib/supabase/client'
 import { getDailyLaws } from '@/lib/daily-laws'
+import { getDailyExplorerLaws } from '@/lib/explorer-laws'
 import SharePanel from '@/components/SharePanel'
 
 // Auth Context
@@ -859,6 +860,33 @@ function DailyLawCard({ law, onClick }) {
   )
 }
 
+// ExplorerLawCard — textes législatifs réels cliquables
+function ExplorerLawCard({ law, onClick }) {
+  const statusColor = law.status === 'Promulguée' ? 'text-green-400' : law.status === 'En débat' || law.status === 'En discussion' ? 'text-yellow-400' : 'text-blue-400'
+  return (
+    <motion.button
+      onClick={() => onClick(law.query)}
+      className="text-left p-3 rounded-xl bg-white/5 border border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-500/10 transition-colors w-full"
+      whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="flex items-start gap-2 mb-1">
+        <span className="text-lg shrink-0 leading-none mt-0.5">{law.emoji}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="font-semibold text-sm text-white leading-tight truncate">{law.title}</span>
+          </div>
+          <p className="text-xs text-muted-foreground line-clamp-2">{law.description}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+        <span className="text-xs text-white/30">{law.source}</span>
+        <span className={`text-xs font-medium ${statusColor}`}>{law.status}</span>
+      </div>
+    </motion.button>
+  )
+}
+
 // History Panel
 function HistoryPanel({ onSelectLaw }) {
   const { getAccessToken } = useAuth()
@@ -1179,6 +1207,17 @@ function ButterflyApp() {
                   <p className="text-xs text-center text-muted-foreground">Carte radiale d'implications · 3 anneaux de profondeur · Cliquez les nœuds pour naviguer</p>
                 </div>
               ) : null}
+
+              {mode === 'explore' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-center text-muted-foreground">Textes législatifs réels — Assemblée Nationale & Sénat</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {getDailyExplorerLaws().map((law) => (
+                      <ExplorerLawCard key={law.id} law={law} onClick={(query) => setExploreText(query)} />
+                    ))}
+                  </div>
+                </div>
+              )}
               
               {error && <motion.p className="text-center text-red-400" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{error}</motion.p>}
               
