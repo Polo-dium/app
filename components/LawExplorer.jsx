@@ -197,7 +197,7 @@ export default function LawExplorer() {
       setIsMobile(mobile);
       const svgW = Math.max(Math.min(w - (mobile ? 8 : 20), 1500), 300);
       const svgH = mobile
-        ? Math.max(Math.min(svgW, h - 200), 260)
+        ? Math.max(Math.min(svgW, h - 120), 260)
         : Math.max(Math.min(h - 190, 900), 300);
       setDim({ w: svgW, h: svgH });
     };
@@ -414,7 +414,7 @@ export default function LawExplorer() {
       </div>
 
       {/* ── SVG Map ─────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
         <svg
           ref={svgRef}
           width={dim.w}
@@ -593,8 +593,8 @@ export default function LawExplorer() {
           </g>
         </svg>
 
-        {/* ── Panel détail (hover + click) ──────────────── */}
-        {panelNode && (() => {
+        {/* ── Panel détail DESKTOP (position absolute, overlay SVG) ── */}
+        {!isMobile && panelNode && (() => {
           const sc = sectorColor(panelNode.sector);
           const secLabel = SECTORS[panelNode.sector]?.label || panelNode.sector;
           return (
@@ -627,38 +627,68 @@ export default function LawExplorer() {
                 </div>
                 <button onClick={() => { setPanelNode(null); setPanelLocked(false); }} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 20, padding: 0, lineHeight: 1, marginLeft: 8, flexShrink: 0 }}>×</button>
               </div>
-
-              <div style={{ fontSize: 17, fontWeight: 600, color: '#E8E6E1', marginBottom: 8, lineHeight: 1.35 }}>
-                {panelNode.title}
-              </div>
-              <div style={{ fontSize: 13, color: '#8A8880', lineHeight: 1.65, marginBottom: 16 }}>
-                {panelNode.summary}
-              </div>
-
+              <div style={{ fontSize: 17, fontWeight: 600, color: '#E8E6E1', marginBottom: 8, lineHeight: 1.35 }}>{panelNode.title}</div>
+              <div style={{ fontSize: 13, color: '#8A8880', lineHeight: 1.65, marginBottom: 16 }}>{panelNode.summary}</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=analyse`; }}
                   style={{ flex: 1, padding: '10px 14px', border: `1px solid ${sc}40`, borderRadius: 9, background: `${sc}14`, color: sc, fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = `${sc}28`}
-                  onMouseLeave={e => e.currentTarget.style.background = `${sc}14`}>
-                  Analyser →
-                </button>
+                  onMouseLeave={e => e.currentTarget.style.background = `${sc}14`}>Analyser →</button>
                 <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=debate`; }}
                   style={{ padding: '10px 14px', border: '1px solid #ffffff10', borderRadius: 9, background: '#ffffff06', color: '#888', fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#ffffff14'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#ffffff06'}>
-                  Débattre ⚔
-                </button>
+                  onMouseLeave={e => e.currentTarget.style.background = '#ffffff06'}>Débattre ⚔</button>
                 <button onClick={() => { window.location.href = `/explorer?loi=${encodeURIComponent(panelNode.title)}`; }}
                   style={{ padding: '10px 14px', border: '1px solid #8B6BEF28', borderRadius: 9, background: '#8B6BEF0A', color: '#8B6BEF', fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#8B6BEF1C'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#8B6BEF0A'}>
-                  ↻ Explorer
-                </button>
+                  onMouseLeave={e => e.currentTarget.style.background = '#8B6BEF0A'}>↻ Explorer</button>
               </div>
             </div>
           );
         })()}
       </div>
+
+      {/* ── Panel détail MOBILE — en-dessous de la carte, dans le flux ── */}
+      {isMobile && panelNode && (() => {
+        const sc = sectorColor(panelNode.sector);
+        const secLabel = SECTORS[panelNode.sector]?.label || panelNode.sector;
+        return (
+          <div style={{
+            flexShrink: 0,
+            background: 'rgba(8,8,13,0.98)',
+            border: `1px solid ${sc}38`,
+            borderTop: `1.5px solid ${sc}55`,
+            padding: '12px 16px',
+            backdropFilter: 'blur(20px)',
+            boxShadow: `0 -8px 32px rgba(0,0,0,0.6)`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: sc, boxShadow: `0 0 6px ${sc}90`, flexShrink: 0 }} />
+                <span style={{ fontSize: 9, color: sc, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: 1.5 }}>{secLabel}</span>
+                <span style={{ fontSize: 9, color: '#444', fontFamily: 'monospace' }}>· {RING_LABELS[panelNode.ring]}</span>
+              </div>
+              <button onClick={() => { setPanelNode(null); setPanelLocked(false); }} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 20, padding: 0, lineHeight: 1, flexShrink: 0 }}>×</button>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#E8E6E1', marginBottom: 5, lineHeight: 1.3 }}>{panelNode.title}</div>
+            <div style={{ fontSize: 12, color: '#8A8880', lineHeight: 1.55, marginBottom: 10 }}>{panelNode.summary}</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=analyse`; }}
+                style={{ flex: 1, padding: '8px 10px', border: `1px solid ${sc}40`, borderRadius: 8, background: `${sc}14`, color: sc, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
+                Analyser →
+              </button>
+              <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(panelNode.title)}&mode=debate`; }}
+                style={{ padding: '8px 10px', border: '1px solid #ffffff10', borderRadius: 8, background: '#ffffff06', color: '#888', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
+                ⚔
+              </button>
+              <button onClick={() => { window.location.href = `/explorer?loi=${encodeURIComponent(panelNode.title)}`; }}
+                style={{ padding: '8px 10px', border: '1px solid #8B6BEF28', borderRadius: 8, background: '#8B6BEF0A', color: '#8B6BEF', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
+                ↻
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
