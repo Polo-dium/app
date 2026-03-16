@@ -529,7 +529,7 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
   }
 
   const generateSummary = async () => {
-    if (messages.length < 3 || summaryLoading) return
+    if (messages.length < 1 || summaryLoading) return
     setSummaryLoading(true)
     try {
       const token = await getAccessToken()
@@ -684,7 +684,7 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
         {/* Input + Summary/Chat toggle */}
         <div className="space-y-2 pt-2 border-t border-white/10">
           <div className="flex justify-center gap-2">
-            {messages.length >= 3 && !summaryMode && (
+            {messages.length >= 1 && !summaryMode && (
               <button onClick={generateSummary} disabled={summaryLoading} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 px-3 py-1 rounded-full bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 transition-colors disabled:opacity-50">
                 {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : '📋'} Résumé du débat
               </button>
