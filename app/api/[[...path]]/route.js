@@ -814,8 +814,9 @@ async function handleCreateCheckout(request) {
     mode: 'subscription',
     payment_method_types: ['card'],
     line_items: [{ price: process.env.STRIPE_PREMIUM_PRICE_ID, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}?canceled=true`,
+    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/`,
+    allow_promotion_codes: true,
     metadata: { user_id: user.id }
   })
   
