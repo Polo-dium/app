@@ -959,6 +959,11 @@ function ButterflyApp() {
       const token = await getAccessToken()
       const hdrs = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       const response = await fetch('/api/explain', { method: 'POST', headers: hdrs, body: JSON.stringify({ query: explainText.trim() }) })
+      if (response.status === 429) {
+        const data = await response.json()
+        setRateLimitExceeded({ userTier: data.userTier, resetAt: data.resetAt })
+        return
+      }
       if (!response.ok) throw new Error('Erreur lors de l\'explication')
       const reader = response.body.getReader()
       const decoder = new TextDecoder()

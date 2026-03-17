@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 // ── Palette des secteurs ───────────────────────────────
 const SECTORS = {
@@ -142,6 +143,18 @@ export default function LawExplorer() {
   const [loading, setLoading] = useState(false);
   const [expanding, setExpanding] = useState(false);
   const [apiError, setApiError] = useState(null);
+  const [rateLimitError, setRateLimitError] = useState(null); // { message, userTier, resetAt }
+
+  // Auth helper — récupère le token pour rate limiting par user
+  const getAuthHeaders = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      if (!supabase) return {};
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) return { 'Authorization': `Bearer ${session.access_token}` };
+    } catch { /* silence */ }
+    return {};
+  }, []);
 
   // ── Navigation stack ───────────────────────────────────
   // Chaque niveau : { title, sector, nodes: [...], parentLaw }
@@ -163,14 +176,22 @@ export default function LawExplorer() {
   const fetchConstellation = useCallback(async (law) => {
     setLoading(true);
     setApiError(null);
+    setRateLimitError(null);
     setNavStack([]);
     setPanelNode(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/explore', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ law }),
       });
+      if (res.status === 429) {
+        const rl = await res.json();
+        setRateLimitError({ message: rl.message, userTier: rl.userTier, resetAt: rl.resetAt });
+        setLoading(false);
+        return;
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur API');
       // Premier niveau : ring 0 (implications directes)
@@ -189,7 +210,7 @@ export default function LawExplorer() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
   // ── Clic sur une node → elle devient le nouveau centre ──
   const drillInto = useCallback(async (node) => {
@@ -197,15 +218,22 @@ export default function LawExplorer() {
     setExpanding(true);
     setPanelNode(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/explore/expand', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           law: lawQuery,
           nodeTitle: node.title,
           nodeSummary: node.summary,
         }),
       });
+      if (res.status === 429) {
+        const rl = await res.json();
+        setRateLimitError({ message: rl.message, userTier: rl.userTier, resetAt: rl.resetAt });
+        setExpanding(false);
+        return;
+      }
       const data = await res.json();
       if (!res.ok || !data.children?.length) throw new Error(data.error || 'Erreur');
       setNavStack(prev => [...prev, {
@@ -219,7 +247,7 @@ export default function LawExplorer() {
     } finally {
       setExpanding(false);
     }
-  }, [expanding, lawQuery]);
+  }, [expanding, lawQuery, getAuthHeaders]);
 
   // ── Clic sur le centre → retour au niveau précédent ──
   const goBack = useCallback(() => {
@@ -236,15 +264,22 @@ export default function LawExplorer() {
     setPanelNode(null);
     setHoveredId(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/explore/expand', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           law: lawQuery,
           nodeTitle: siblingNode.title,
           nodeSummary: siblingNode.summary,
         }),
       });
+      if (res.status === 429) {
+        const rl = await res.json();
+        setRateLimitError({ message: rl.message, userTier: rl.userTier, resetAt: rl.resetAt });
+        setExpanding(false);
+        return;
+      }
       const data = await res.json();
       if (!res.ok || !data.children?.length) throw new Error(data.error || 'Erreur');
       // Remplace le dernier niveau (même profondeur, nœud frère différent)
@@ -259,7 +294,7 @@ export default function LawExplorer() {
     } finally {
       setExpanding(false);
     }
-  }, [expanding, lawQuery]);
+  }, [expanding, lawQuery, getAuthHeaders]);
 
   // ── Responsive ─────────────────────────────────────────
   useEffect(() => {
@@ -314,6 +349,37 @@ export default function LawExplorer() {
         background: 'linear-gradient(135deg, #8B6BEF 0%, #5B8DEF 100%)',
         color: '#fff', fontSize: 14, cursor: 'pointer',
       }}>Réessayer</button>
+    </div>
+  );
+
+  // ── Rate limit atteint (explore ou expand) ───────────
+  if (rateLimitError && !currentView) return (
+    <div style={{
+      minHeight: '100vh', background: '#08080D', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', padding: 40,
+      fontFamily: 'system-ui, sans-serif', color: '#E8E6E1', textAlign: 'center',
+    }}>
+      <p style={{ fontSize: 40, marginBottom: 16 }}>⏳</p>
+      <p style={{ color: '#EFB85B', marginBottom: 8, fontSize: 18, fontWeight: 600 }}>Limite atteinte</p>
+      <p style={{ color: '#888', marginBottom: 24, fontSize: 14, maxWidth: 440, lineHeight: 1.6 }}>{rateLimitError.message}</p>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {rateLimitError.userTier === 'anonymous' && (
+          <a href="/" style={{
+            padding: '12px 24px', borderRadius: 10, border: '1px solid #5B8DEF40',
+            background: '#5B8DEF18', color: '#5B8DEF', fontSize: 14,
+            textDecoration: 'none', fontWeight: 500,
+          }}>Créer un compte gratuit</a>
+        )}
+        <a href="/" style={{
+          padding: '12px 24px', borderRadius: 10, border: 'none',
+          background: 'linear-gradient(135deg, #EFB85B 0%, #EF6B5B 100%)',
+          color: '#000', fontSize: 14, textDecoration: 'none', fontWeight: 600,
+        }}>Premium — 7,99€/mois</a>
+        <a href="/" style={{
+          padding: '12px 24px', borderRadius: 10, border: '1px solid #ffffff15',
+          background: 'transparent', color: '#666', fontSize: 14, textDecoration: 'none',
+        }}>← Retour</a>
+      </div>
     </div>
   );
   if (!currentView) return null;
@@ -753,6 +819,42 @@ export default function LawExplorer() {
             </div>
           );
         })()}
+
+        {/* ── Rate limit overlay (sur la carte) ──────────── */}
+        {rateLimitError && currentView && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(8,8,13,0.92)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            zIndex: 20, backdropFilter: 'blur(8px)',
+            padding: 24,
+          }}>
+            <p style={{ fontSize: 32, marginBottom: 12 }}>⏳</p>
+            <p style={{ color: '#EFB85B', fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Limite d'exploration atteinte</p>
+            <p style={{ color: '#888', fontSize: 13, textAlign: 'center', maxWidth: 380, lineHeight: 1.6, marginBottom: 20 }}>
+              {rateLimitError.message}
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {rateLimitError.userTier === 'anonymous' && (
+                <a href="/" style={{
+                  padding: '10px 18px', borderRadius: 8, border: '1px solid #5B8DEF40',
+                  background: '#5B8DEF18', color: '#5B8DEF', fontSize: 12,
+                  textDecoration: 'none', fontWeight: 500,
+                }}>Créer un compte</a>
+              )}
+              <a href="/" style={{
+                padding: '10px 18px', borderRadius: 8, border: 'none',
+                background: 'linear-gradient(135deg, #EFB85B 0%, #EF6B5B 100%)',
+                color: '#000', fontSize: 12, textDecoration: 'none', fontWeight: 600,
+              }}>Premium 7,99€/mois</a>
+              <button onClick={() => setRateLimitError(null)} style={{
+                padding: '10px 18px', borderRadius: 8, border: '1px solid #ffffff15',
+                background: 'transparent', color: '#666', fontSize: 12, cursor: 'pointer',
+              }}>Fermer</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Panel détail MOBILE ──────────────────────────── */}

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { SYSTEM_PROMPT_EXPLICATION, buildExplicationPrompt } from '@/lib/prompts/explication'
-import { createServiceClient } from '@/lib/supabase/server'
-import { headers } from 'next/headers'
+import { getUser, getUserTierInfo, checkFeatureRateLimit, EXPLAIN_LIMITS, RATE_MESSAGES } from '@/lib/rateLimit'
 
 // Modèle configurable via variable d'environnement
 const MODEL_FREE = process.env.CLAUDE_MODEL_FREE || 'claude-haiku-4-5-20251001'
@@ -11,29 +10,6 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders })
-}
-
-async function getUser(request) {
-  const supabase = createServiceClient()
-  if (!supabase) return null
-  const authHeader = request.headers.get('authorization')
-  if (!authHeader?.startsWith('Bearer ')) return null
-  const token = authHeader.split(' ')[1]
-  const { data: { user }, error } = await supabase.auth.getUser(token)
-  if (error || !user) return null
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  return { ...user, profile }
-}
-
-function getClientIP(request) {
-  const headersList = headers()
-  const forwardedFor = headersList.get('x-forwarded-for')
-  if (forwardedFor) return forwardedFor.split(',')[0].trim()
-  return headersList.get('x-real-ip') || 'unknown'
 }
 
 export async function POST(request) {
@@ -54,16 +30,21 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Le champ "query" est requis' }, { status: 400, headers: corsHeaders })
   }
 
-  // Rate limiting — reuse same tier logic
+  // Rate limiting
   const user = await getUser(request)
-  const ip = getClientIP(request)
-  const isPremium = user?.profile?.is_premium
+  const { identifier, identifierType, userTier } = getUserTierInfo(user)
+  const limits = EXPLAIN_LIMITS[userTier]
+  const rateLimit = await checkFeatureRateLimit(identifier, identifierType, limits, 'explain')
 
-  // Explication is available to all tiers (same daily limits as analyze)
-  // Premium users have no friction; anonymous/free get a lighter limit check
-  // We let this endpoint through freely since it's a "read-only" explainer
-  // but still check for auth to allow premium features later
-  const userTier = isPremium ? 'premium' : user ? 'free' : 'anonymous'
+  if (!rateLimit.allowed) {
+    return NextResponse.json({
+      error: 'rate_limit_exceeded',
+      message: RATE_MESSAGES.explain[userTier] || 'Limite atteinte.',
+      remaining: 0,
+      resetAt: rateLimit.resetAt,
+      userTier,
+    }, { status: 429, headers: corsHeaders })
+  }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const userPrompt = buildExplicationPrompt(query.trim(), assemblyData || null)

@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { headers } from 'next/headers'
+import { getUser, getUserTierInfo, checkFeatureRateLimit, EXPLORE_LIMITS, RATE_MESSAGES } from '@/lib/rateLimit'
 
 const MODEL_FREE = process.env.CLAUDE_MODEL_FREE || 'claude-haiku-4-5-20251001'
 
@@ -78,6 +78,22 @@ export async function POST(request) {
   const trimmed = law.trim()
   if (trimmed.length < 8) {
     return NextResponse.json({ error: 'Proposition trop courte (minimum 8 caractères)' }, { status: 400, headers: corsHeaders })
+  }
+
+  // Rate limiting
+  const user = await getUser(request)
+  const { identifier, identifierType, userTier } = getUserTierInfo(user)
+  const limits = EXPLORE_LIMITS[userTier]
+  const rateLimit = await checkFeatureRateLimit(identifier, identifierType, limits, 'explore')
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json({
+      error: 'rate_limit_exceeded',
+      message: RATE_MESSAGES.explore[userTier] || 'Limite atteinte.',
+      remaining: 0,
+      resetAt: rateLimit.resetAt,
+      userTier,
+    }, { status: 429, headers: corsHeaders })
   }
 
   try {
