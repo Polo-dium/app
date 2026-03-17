@@ -847,9 +847,10 @@ async function handleCancelSubscription(request) {
 
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-    await stripe.subscriptions.cancel(profile.stripe_subscription_id)
-    await supabase.from('profiles').update({ is_premium: false, stripe_subscription_id: null }).eq('id', user.id)
-    return NextResponse.json({ success: true }, { headers: corsHeaders })
+    // Annulation en fin de période — l'accès Premium reste actif jusqu'à la prochaine échéance
+    await stripe.subscriptions.update(profile.stripe_subscription_id, { cancel_at_period_end: true })
+    await supabase.from('profiles').update({ stripe_cancel_at_period_end: true }).eq('id', user.id)
+    return NextResponse.json({ success: true, cancel_at_period_end: true }, { headers: corsHeaders })
   } catch (err) {
     console.error('Cancel subscription error:', err)
     return NextResponse.json({ error: 'Erreur lors de la résiliation' }, { status: 500, headers: corsHeaders })

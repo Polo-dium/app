@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   premium_until TIMESTAMP WITH TIME ZONE,
+  stripe_cancel_at_period_end BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -118,7 +119,10 @@ CREATE POLICY "Service role can manage rate limits"
   ON rate_limits FOR ALL
   USING (true);
 
--- 10. Vue pour le leaderboard
+-- 10. Migration : colonne stripe_cancel_at_period_end (à exécuter si table déjà créée)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_cancel_at_period_end BOOLEAN DEFAULT FALSE;
+
+-- 11. Vue pour le leaderboard
 CREATE OR REPLACE VIEW leaderboard_view AS
 SELECT 
   id,

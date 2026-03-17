@@ -62,6 +62,16 @@ function AuthProvider({ children }) {
     setProfile(data)
     setLoading(false)
   }
+
+  const refreshProfile = async () => {
+    const supabase = createClient()
+    if (!supabase) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+      setProfile(data)
+    }
+  }
   
   const signInWithGoogle = async () => {
     const supabase = createClient()
@@ -91,7 +101,7 @@ function AuthProvider({ children }) {
   }
   
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signInWithGoogle, signInWithEmail, signOut, getAccessToken, isPremium: profile?.is_premium || false, supabaseConfigured }}>
+    <AuthContext.Provider value={{ user, profile, loading, signInWithGoogle, signInWithEmail, signOut, getAccessToken, refreshProfile, isPremium: profile?.is_premium || false, isCanceled: profile?.stripe_cancel_at_period_end || false, supabaseConfigured }}>
       {children}
     </AuthContext.Provider>
   )
@@ -232,12 +242,13 @@ function PremiumBadge() {
 
 // User Menu
 function UserMenu() {
-  const { user, profile, signOut, isPremium, getAccessToken } = useAuth()
+  const { user, signOut, isPremium, isCanceled, getAccessToken, refreshProfile } = useAuth()
   const [open, setOpen] = useState(false)
   const [canceling, setCanceling] = useState(false)
+  const [resuming, setResuming] = useState(false)
 
   const handleUnsubscribe = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir résilier votre abonnement Premium ?')) return
+    if (!confirm('Êtes-vous sûr de vouloir résilier votre abonnement Premium ? Votre accès restera actif jusqu\'à la fin de la période en cours.')) return
     setCanceling(true)
     try {
       const token = await getAccessToken()
@@ -246,7 +257,7 @@ function UserMenu() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) {
-        alert('Abonnement résilié. Votre accès Premium reste actif jusqu\'à la fin de la période.')
+        await refreshProfile()
         setOpen(false)
       } else {
         const data = await res.json()
@@ -259,6 +270,27 @@ function UserMenu() {
     }
   }
 
+  const handleResume = async () => {
+    setResuming(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        window.location.href = data.url
+      } else {
+        alert('Impossible d\'ouvrir le portail de gestion')
+      }
+    } catch {
+      alert('Erreur réseau')
+    } finally {
+      setResuming(false)
+    }
+  }
+
   if (!user) return null
   return (
     <div className="relative">
@@ -268,11 +300,21 @@ function UserMenu() {
       </button>
       {open && (
         <motion.div className="absolute right-0 top-12 w-64 bg-card rounded-lg border border-white/10 shadow-xl overflow-hidden z-50" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="p-4 border-b border-white/10"><p className="font-medium truncate">{user.email}</p><p className="text-sm text-muted-foreground">{isPremium ? 'Citoyen Premium' : 'Compte gratuit'}</p></div>
+          <div className="p-4 border-b border-white/10">
+            <p className="font-medium truncate">{user.email}</p>
+            <p className="text-sm text-muted-foreground">
+              {isPremium && isCanceled ? 'Premium — résiliation planifiée' : isPremium ? 'Citoyen Premium' : 'Compte gratuit'}
+            </p>
+          </div>
           <div className="p-2">
-            {isPremium && (
+            {isPremium && !isCanceled && (
               <button onClick={handleUnsubscribe} disabled={canceling} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-500/10 text-left text-sm text-red-400 disabled:opacity-50">
                 <X className="w-4 h-4" />{canceling ? 'Résiliation...' : 'Se désabonner'}
+              </button>
+            )}
+            {isPremium && isCanceled && (
+              <button onClick={handleResume} disabled={resuming} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-green-500/10 text-left text-sm text-green-400 disabled:opacity-50">
+                <RefreshCw className="w-4 h-4" />{resuming ? 'Chargement...' : 'Reprendre l\'abonnement'}
               </button>
             )}
             <a href={`mailto:boutarin.paul@gmail.com?subject=Support Butterfly.gov&body=Bonjour,%0A%0AMon compte : ${user.email}%0A%0A`} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm text-muted-foreground hover:text-white transition-colors">

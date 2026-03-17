@@ -84,13 +84,13 @@ export async function POST(request) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object
         await supabase.from('profiles')
-          .update({ is_premium: false, premium_until: null })
+          .update({ is_premium: false, premium_until: null, stripe_cancel_at_period_end: false, stripe_subscription_id: null })
           .eq('stripe_customer_id', subscription.customer)
         console.log(`[Webhook] subscription.deleted → customer ${subscription.customer} rétrogradé`)
         break
       }
 
-      // ── Abonnement mis à jour (impayé, reprise, etc.) ──────────────────
+      // ── Abonnement mis à jour (impayé, reprise, annulation planifiée, etc.) ──────────────────
       case 'customer.subscription.updated': {
         const subscription = event.data.object
         const activeStatuses = ['active', 'trialing']
@@ -98,12 +98,14 @@ export async function POST(request) {
         const premiumUntil = isActive
           ? new Date(subscription.current_period_end * 1000).toISOString()
           : null
+        // Annulation planifiée en fin de période (cancel_at_period_end)
+        const cancelAtPeriodEnd = subscription.cancel_at_period_end === true
 
         await supabase.from('profiles')
-          .update({ is_premium: isActive, premium_until: premiumUntil })
+          .update({ is_premium: isActive, premium_until: premiumUntil, stripe_cancel_at_period_end: cancelAtPeriodEnd })
           .eq('stripe_customer_id', subscription.customer)
 
-        console.log(`[Webhook] subscription.updated → customer ${subscription.customer} status=${subscription.status} is_premium=${isActive}`)
+        console.log(`[Webhook] subscription.updated → customer ${subscription.customer} status=${subscription.status} is_premium=${isActive} cancel_at_period_end=${cancelAtPeriodEnd}`)
         break
       }
 
