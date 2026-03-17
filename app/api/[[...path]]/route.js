@@ -830,6 +830,10 @@ async function handleCancelSubscription(request) {
     return NextResponse.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders })
   }
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ error: 'Stripe non configuré' }, { status: 500, headers: corsHeaders })
+  }
+
   const supabase = createServiceClient()
   if (!supabase) {
     return NextResponse.json({ error: 'Service non disponible' }, { status: 500, headers: corsHeaders })
@@ -842,7 +846,9 @@ async function handleCancelSubscription(request) {
   }
 
   try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
     await stripe.subscriptions.cancel(profile.stripe_subscription_id)
+    await supabase.from('profiles').update({ is_premium: false, stripe_subscription_id: null }).eq('id', user.id)
     return NextResponse.json({ success: true }, { headers: corsHeaders })
   } catch (err) {
     console.error('Cancel subscription error:', err)
