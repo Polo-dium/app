@@ -1075,9 +1075,9 @@ function ButterflyApp() {
               
               <div className="flex justify-center">
                 <div className="inline-flex rounded-full bg-black/30 p-1 border border-white/10">
-                  <button onClick={() => setMode('single')} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Analyser</button>
-                  <button onClick={() => setMode('explain')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explain' ? 'bg-green-700 text-white' : 'text-muted-foreground hover:text-white'}`}><BookOpen className="w-4 h-4" />Expliquer</button>
-                  <button onClick={() => setMode('explore')} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explore' ? 'bg-violet-700 text-white' : 'text-muted-foreground hover:text-white'}`}><Network className="w-4 h-4" />Explorer</button>
+                  <button onClick={() => { setMode('single'); setProposalSeed(s => s + 1) }} className={`px-4 py-2 rounded-full text-sm transition-colors ${mode === 'single' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-white'}`}><Sparkles className="w-4 h-4 inline mr-1" />Analyser</button>
+                  <button onClick={() => { setMode('explain'); setProposalSeed(s => s + 1) }} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explain' ? 'bg-green-700 text-white' : 'text-muted-foreground hover:text-white'}`}><BookOpen className="w-4 h-4" />Expliquer</button>
+                  <button onClick={() => { setMode('explore'); setProposalSeed(s => s + 1) }} className={`px-4 py-2 rounded-full text-sm transition-colors flex items-center gap-1 ${mode === 'explore' ? 'bg-violet-700 text-white' : 'text-muted-foreground hover:text-white'}`}><Network className="w-4 h-4" />Explorer</button>
                 </div>
               </div>
               
