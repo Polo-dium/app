@@ -227,7 +227,7 @@ function SoftWall({ userTier, resetAt, onSignIn, onUpgrade }) {
         </div>
         <div className="space-y-3">
           {userTier === 'anonymous' && <Button onClick={onSignIn} className="w-full bg-blue-600 hover:bg-blue-500"><User className="w-4 h-4 mr-2" />Créer un compte gratuit (+5 tests/h)</Button>}
-          <Button onClick={onUpgrade} className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"><Crown className="w-4 h-4 mr-2" />Passer Premium (2,99€/mois) - Illimité</Button>
+          <Button onClick={onUpgrade} className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black"><Crown className="w-4 h-4 mr-2" />Passer Premium (7,99€/mois) - Illimité</Button>
           <p className="text-xs text-center text-muted-foreground">Premium = Tests illimités + Débat IA illimité (sans limite de 10/h)</p>
         </div>
       </motion.div>
@@ -1002,19 +1002,17 @@ function ButterflyApp() {
     }
   }
 
-  const stripeEnabled = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-
   const handleUpgrade = async () => {
-    if (!stripeEnabled) {
-      setError('Les abonnements Premium arrivent bientôt ! 🚀 Revenez dans quelques jours.')
-      return
-    }
     const token = await getAccessToken()
     if (!token) { setShowAuthModal(true); return }
-    const response = await fetch('/api/stripe/create-checkout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } })
-    const data = await response.json()
-    if (data.url) window.location.href = data.url
-    else setError(data.error || 'Erreur lors de la création du lien de paiement')
+    try {
+      const response = await fetch('/api/stripe/create-checkout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } })
+      const data = await response.json()
+      if (data.url) window.location.href = data.url
+      else setError(data.error || 'Erreur lors de la création du lien de paiement')
+    } catch {
+      setError('Erreur réseau, veuillez réessayer.')
+    }
   }
   
   const reset = () => { setLawText(''); setResult(null); setExplainText(''); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null); setRateLimitExceeded(null) }
@@ -1036,11 +1034,7 @@ function ButterflyApp() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl"></div>
       </div>
       
-      <header className="relative z-20 flex justify-between items-center p-4">
-        <a href="/explorer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 border border-white/10 hover:border-purple-500/50 hover:bg-purple-500/10 transition-colors text-sm text-muted-foreground hover:text-white">
-          <Network className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Explorer</span>
-        </a>
+      <header className="relative z-20 flex justify-end items-center p-4">
         <div className="flex items-center gap-2">
           {user ? <UserMenu /> : <Button onClick={() => setShowAuthModal(true)} variant="outline" size="sm"><User className="w-4 h-4 mr-2" />Connexion</Button>}
           <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors">{showSidebar ? <X className="w-5 h-5" /> : <History className="w-5 h-5" />}</button>

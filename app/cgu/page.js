@@ -12,7 +12,7 @@ export default function CGU() {
       <h2 className="text-2xl font-bold text-white mb-6">Partie 1 — Conditions Générales d'Utilisation (CGU)</h2>
 
       <Section title="Article 1 — Objet">
-        <p>Les présentes Conditions Générales d'Utilisation régissent l'accès et l'utilisation du site butterflygov.com (ci-après « le Service »), édité par Butterflygov, micro-entreprise en cours d'immatriculation, domiciliée en France (ci-après « l'Éditeur »).</p>
+        <p>Les présentes Conditions Générales d'Utilisation régissent l'accès et l'utilisation du site butterflygov.com (ci-après « le Service »), édité par Butterflygov, micro-entreprise immatriculée sous le numéro RCS 898 098 389 (Villefranche-Tarare), dont le siège social est situé au 119 Rue de la Mairie, 69870 Grandris, France (ci-après « l'Éditeur »).</p>
         <p className="mt-2">Toute utilisation du Service implique l'acceptation pleine et entière des présentes CGU.</p>
       </Section>
 
@@ -21,7 +21,8 @@ export default function CGU() {
         <ul className="mt-2 ml-5 space-y-1 list-disc">
           <li>soumettre des textes de loi ou propositions à l'analyse IA,</li>
           <li>consulter des scores d'impact (économique, social, écologique),</li>
-          <li>comparer deux propositions de loi en mode Débat,</li>
+          <li>obtenir une explication factuelle d'une loi existante (mode Explication),</li>
+          <li>explorer les implications d'une loi en constellation interactive (mode Explorateur),</li>
           <li>débattre avec une IA « Opposant Féroce » sur les résultats d'analyse,</li>
           <li>consulter un historique de leurs analyses,</li>
           <li>accéder à un classement communautaire (leaderboard).</li>
@@ -42,10 +43,10 @@ export default function CGU() {
           <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <p className="font-medium text-white mb-2">Offre Premium</p>
             <ul className="space-y-1 list-disc ml-4">
-              <li>Analyses illimitées</li>
-              <li>Mode Débat (comparaison de 2 lois)</li>
-              <li>Verdict narratif détaillé</li>
-              <li>Débat interactif avec l'IA</li>
+              <li>Analyses illimitées (1 000/h)</li>
+              <li>Débat interactif avec l'IA illimité</li>
+              <li>Explorateur législatif illimité</li>
+              <li>Accès prioritaire aux nouvelles fonctionnalités</li>
             </ul>
           </div>
         </div>
@@ -108,8 +109,8 @@ export default function CGU() {
       </Section>
 
       <Section title="Article 12 — Droit applicable et litiges">
-        <p>Les présentes CGU sont soumises au droit français. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, les tribunaux de [VILLE_TRIBUNAL] seront seuls compétents.</p>
-        <p className="mt-2">Conformément aux dispositions du Code de la consommation, l'utilisateur peut recourir à un médiateur de la consommation. Le médiateur compétent sera communiqué lors de la mise en place des abonnements payants.</p>
+        <p>Les présentes CGU sont soumises au droit français. En cas de litige, les parties s'engagent à rechercher une solution amiable. À défaut, les tribunaux de Villefranche-sur-Saône seront seuls compétents.</p>
+        <p className="mt-2">Conformément aux dispositions du Code de la consommation, l'utilisateur peut recourir à un médiateur de la consommation. Pour toute réclamation, contactez d'abord <a href="mailto:contact@butterflygov.com" className="text-blue-400 hover:text-blue-300">contact@butterflygov.com</a>.</p>
       </Section>
 
       <div className="my-10 border-t border-white/10" />
@@ -119,7 +120,7 @@ export default function CGU() {
 
       <Section title="Article 13 — Offre Premium">
         <p>L'abonnement Premium donne accès aux fonctionnalités décrites à l'Article 3 au tarif suivant :</p>
-        <p className="mt-2 font-medium text-white">Abonnement mensuel : 2,99 € TTC par mois</p>
+        <p className="mt-2 font-medium text-white">Abonnement mensuel : 7,99 € TTC par mois</p>
         <p className="mt-2">Le prix est indiqué en euros, toutes taxes comprises (TVA française applicable).</p>
         <p className="mt-2">Butterflygov se réserve le droit de modifier ses tarifs. Toute modification sera communiquée à l'utilisateur avec un préavis de 30 jours.</p>
       </Section>

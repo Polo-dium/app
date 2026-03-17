@@ -157,6 +157,9 @@ export default function LawExplorer() {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
 
+  // ── Expansion de nodes : sous-nodes au clic ────────────
+  const [expandedNodes, setExpandedNodes] = useState({}); // { [nodeId]: { loading, children: [], parentX, parentY } }
+
   // ── URL param & fetch ────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -221,16 +224,50 @@ export default function LawExplorer() {
     }
   }, [panelLocked]);
 
+  // ── Expansion : clic ouvre 3 sous-nodes autour du node ──
+  const expandNode = useCallback(async (node) => {
+    // Si déjà expansé → collapse
+    if (expandedNodes[node.id]?.children?.length) {
+      setExpandedNodes(prev => {
+        const copy = { ...prev };
+        delete copy[node.id];
+        return copy;
+      });
+      return;
+    }
+    // Si déjà en cours de chargement → ignore
+    if (expandedNodes[node.id]?.loading) return;
+
+    setExpandedNodes(prev => ({ ...prev, [node.id]: { loading: true, children: [], parentX: node.x, parentY: node.y } }));
+    try {
+      const res = await fetch('/api/explore/expand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ law: lawQuery, nodeTitle: node.title, nodeSummary: node.summary }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.children) throw new Error(data.error || 'Erreur');
+      setExpandedNodes(prev => ({
+        ...prev,
+        [node.id]: { loading: false, children: data.children, parentX: node.x, parentY: node.y, parentSector: node.sector },
+      }));
+    } catch {
+      setExpandedNodes(prev => {
+        const copy = { ...prev };
+        delete copy[node.id];
+        return copy;
+      });
+    }
+  }, [expandedNodes, lawQuery]);
+
   const handleNodeClick = useCallback((node) => {
     clearTimeout(hoverTimer.current);
-    if (panelLocked && panelNode?.id === node.id) {
-      setPanelLocked(false);
-      setPanelNode(null);
-    } else {
-      setPanelNode(node);
-      setPanelLocked(true);
-    }
-  }, [panelLocked, panelNode]);
+    // Toujours afficher le panel
+    setPanelNode(node);
+    setPanelLocked(true);
+    // Lancer l'expansion en parallèle
+    expandNode(node);
+  }, [expandNode]);
 
   const handlePanelEnter = useCallback(() => clearTimeout(hoverTimer.current), []);
   const handlePanelLeave = useCallback(() => {
@@ -329,6 +366,7 @@ export default function LawExplorer() {
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
         .depth-btn:hover { filter: brightness(1.2); }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
       {/* ── Top bar ─────────────────────────────────── */}
@@ -413,7 +451,7 @@ export default function LawExplorer() {
                   )}
                   <button
                     className="depth-btn"
-                    onClick={() => { setDepth(v); setPanelNode(null); setPanelLocked(false); }}
+                    onClick={() => { setDepth(v); setPanelNode(null); setPanelLocked(false); setExpandedNodes({}); }}
                     title={RING_LABELS[v - 1]}
                     style={{
                       width: btnSize, height: btnSize, borderRadius: '50%',
@@ -622,6 +660,85 @@ export default function LawExplorer() {
                     {l2 && <tspan x={0} dy={lineH}>{l2}</tspan>}
                   </text>
                 )}
+              </g>
+            );
+          })}
+
+          {/* ── Sous-nodes (expansion au clic) ──────────── */}
+          {Object.entries(expandedNodes).map(([parentId, exp]) => {
+            if (!exp.children?.length) return null;
+            // Retrouver la position du parent
+            const parent = visibleNodes.find(n => n.id === parentId);
+            if (!parent) return null;
+            const subR = Math.max(45, Math.min(80, dim.w / 16)); // rayon de l'orbite des sous-nodes
+            const subNodeR = Math.max(5, baseSize * 1.3);
+            return exp.children.map((child, ci) => {
+              // Position autour du parent à 120° d'intervalle
+              const baseAngle = Math.atan2(parent.y - cy, parent.x - cx);
+              const angle = baseAngle + ((ci - 1) * Math.PI / 3.5);
+              const sx = parent.x + subR * Math.cos(angle);
+              const sy = parent.y + subR * Math.sin(angle);
+              const sc = sectorColor(child.sector);
+              const isSubHovered = hoveredId === `sub-${parentId}-${ci}`;
+              const [sl1, sl2] = splitTitle(child.title, 12);
+              const subLineH = (fs.tiny + 1) + 2;
+              const subLabelY = sy > parent.y ? subNodeR + fs.tiny + 3 : -(subNodeR + 5 + (sl2 ? subLineH : 0));
+              return (
+                <g key={`sub-${parentId}-${ci}`}>
+                  {/* Ligne parent → enfant */}
+                  <line x1={parent.x} y1={parent.y} x2={sx} y2={sy}
+                    stroke={sc} strokeOpacity={0.2} strokeWidth={1}
+                    strokeDasharray="3 4"
+                    style={{ transition: 'all 0.4s ease-out' }} />
+                  {/* Noeud enfant */}
+                  <g transform={`translate(${sx}, ${sy})`}
+                    style={{ cursor: 'pointer', transition: 'transform 0.4s ease-out' }}
+                    onMouseEnter={() => setHoveredId(`sub-${parentId}-${ci}`)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Clic sur sous-node → naviguer vers explication
+                      window.location.href = `/?loi=${encodeURIComponent(`Externalités et besoins législatifs de "${child.title}", conséquence de la loi "${lawQuery}"`)}&mode=explain`;
+                    }}
+                  >
+                    <circle cx={0} cy={0} r={subNodeR * 3} fill={`url(#ng-${child.sector})`}
+                      opacity={isSubHovered ? 0.7 : 0} style={{ transition: 'opacity 0.2s', pointerEvents: 'none' }} />
+                    <circle cx={0} cy={0}
+                      r={isSubHovered ? subNodeR * 1.3 : subNodeR}
+                      fill={isSubHovered ? sc + '1C' : '#0C0C14'}
+                      stroke={sc} strokeOpacity={isSubHovered ? 0.9 : 0.5}
+                      strokeWidth={1.2}
+                      style={{ transition: 'all 0.2s ease-out' }} />
+                    <circle cx={0} cy={0} r={subNodeR * 0.35} fill={sc}
+                      opacity={isSubHovered ? 1 : 0.5}
+                      style={{ transition: 'opacity 0.2s' }} />
+                    {/* Label */}
+                    <text x={0} y={subLabelY} textAnchor="middle"
+                      fill={isSubHovered ? '#fff' : '#aaa'}
+                      fontSize={fs.tiny + 1} fontFamily="system-ui, sans-serif"
+                      fontWeight={isSubHovered ? 600 : 400}
+                      filter="url(#lblHalo)"
+                      style={{ pointerEvents: 'none', transition: 'fill 0.2s' }}>
+                      <tspan x={0}>{sl1}</tspan>
+                      {sl2 && <tspan x={0} dy={subLineH}>{sl2}</tspan>}
+                    </text>
+                  </g>
+                </g>
+              );
+            });
+          })}
+
+          {/* Indicateur de chargement pour les expansions en cours */}
+          {Object.entries(expandedNodes).map(([parentId, exp]) => {
+            if (!exp.loading) return null;
+            const parent = visibleNodes.find(n => n.id === parentId);
+            if (!parent) return null;
+            return (
+              <g key={`loading-${parentId}`}>
+                <circle cx={parent.x} cy={parent.y} r={nodeR(parent.ring) * 2.5}
+                  fill="none" stroke={sectorColor(parent.sector)} strokeOpacity={0.3}
+                  strokeWidth={1.5} strokeDasharray="6 4"
+                  style={{ transformOrigin: `${parent.x}px ${parent.y}px`, animation: 'spin 2s linear infinite' }} />
               </g>
             );
           })}

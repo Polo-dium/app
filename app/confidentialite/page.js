@@ -13,9 +13,9 @@ export default function Confidentialite() {
       </p>
 
       <Section title="1. Responsable du traitement">
-        <p><strong>Butterflygov</strong></p>
-        <p>SIREN : En cours d'immatriculation</p>
-        <p>Siège social : France</p>
+        <p><strong>Butterflygov</strong> — Paul Boutarin</p>
+        <p>RCS : 898 098 389 — Villefranche-Tarare</p>
+        <p>Siège social : 119 Rue de la Mairie, 69870 Grandris, France</p>
         <p>Contact DPO : <a href="mailto:privacy@butterflygov.com" className="text-blue-400 hover:text-blue-300">privacy@butterflygov.com</a></p>
       </Section>
 
@@ -149,7 +149,7 @@ export default function Confidentialite() {
 
       <Section title="11. Contact">
         <p><strong>Email</strong> : <a href="mailto:privacy@butterflygov.com" className="text-blue-400 hover:text-blue-300">privacy@butterflygov.com</a></p>
-        <p><strong>Courrier</strong> : Butterflygov — contact@butterflygov.com</p>
+        <p><strong>Courrier</strong> : Butterflygov — 119 Rue de la Mairie, 69870 Grandris</p>
       </Section>
     </LegalLayout>
   )

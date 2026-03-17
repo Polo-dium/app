@@ -11,10 +11,12 @@ export default function MentionsLegales() {
 
       <Section title="Éditeur du site">
         <p><strong>Butterflygov</strong></p>
-        <p>Forme juridique : Micro-entreprise</p>
-        <p>SIREN : En cours d'immatriculation</p>
-        <p>Siège social : France</p>
-        <p>Directeur de la publication : Paul Boutaud</p>
+        <p>Forme juridique : Micro-entreprise (Entreprise individuelle)</p>
+        <p>RCS : 898 098 389 — Villefranche-Tarare</p>
+        <p>Date d'immatriculation : 17 mars 2026</p>
+        <p>Siège social : 119 Rue de la Mairie, 69870 Grandris, France</p>
+        <p>Directeur de la publication : Paul Boutarin</p>
+        <p>Activité : Site web avec service IA</p>
         <p>Contact : <a href="mailto:contact@butterflygov.com" className="text-blue-400 hover:text-blue-300">contact@butterflygov.com</a></p>
       </Section>
 
