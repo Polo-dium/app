@@ -225,8 +225,41 @@ export default function LawExplorer() {
   const goBack = useCallback(() => {
     if (navStack.length <= 1) return;
     setPanelNode(null);
+    setHoveredId(null);
     setNavStack(prev => prev.slice(0, -1));
   }, [navStack.length]);
+
+  // ── Switcher vers un nœud frère (barre précédente) ────
+  const switchToSibling = useCallback(async (siblingNode) => {
+    if (expanding) return;
+    setExpanding(true);
+    setPanelNode(null);
+    setHoveredId(null);
+    try {
+      const res = await fetch('/api/explore/expand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          law: lawQuery,
+          nodeTitle: siblingNode.title,
+          nodeSummary: siblingNode.summary,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.children?.length) throw new Error(data.error || 'Erreur');
+      // Remplace le dernier niveau (même profondeur, nœud frère différent)
+      setNavStack(prev => [...prev.slice(0, -1), {
+        title: siblingNode.title,
+        sector: siblingNode.sector,
+        nodes: data.children,
+        parentLaw: lawQuery,
+      }]);
+    } catch {
+      // Silence
+    } finally {
+      setExpanding(false);
+    }
+  }, [expanding, lawQuery]);
 
   // ── Responsive ─────────────────────────────────────────
   useEffect(() => {
@@ -307,6 +340,7 @@ export default function LawExplorer() {
   const sectorColor = (key) => SECTORS[key]?.color || '#888';
   const centerSector = sectorColor(currentView.sector);
   const canGoBack = navStack.length > 1;
+  const prevLevelNodes = navStack.length > 1 ? navStack[navStack.length - 2].nodes : [];
 
   // ── Split titre en 2 lignes max ────────────────────────
   const splitTitle = (title = '', maxPerLine = 14) => {
@@ -460,10 +494,58 @@ export default function LawExplorer() {
           fontFamily: 'monospace', letterSpacing: 0.5, textAlign: 'center',
         }}>
           {expanding ? '⏳ Chargement des implications…' :
-            canGoBack ? 'Cliquez une node pour explorer · Cliquez le centre pour revenir' :
-            'Cliquez une node pour explorer ses implications'}
+            isMobile
+              ? (canGoBack ? 'Tapez une node · Tapez le centre pour revenir' : 'Tapez une node pour voir ses détails')
+              : (canGoBack ? 'Cliquez une node pour explorer · Cliquez le centre pour revenir' : 'Cliquez une node pour explorer ses implications')}
         </p>
       </div>
+
+      {/* ── Barre nœuds précédents (siblings) ────────────── */}
+      {prevLevelNodes.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: isMobile ? 4 : 6, padding: isMobile ? '4px 8px' : '5px 16px',
+          flexWrap: 'wrap', flexShrink: 0,
+          opacity: entered ? 1 : 0, transition: 'opacity 0.4s 0.3s',
+        }}>
+          {prevLevelNodes.map((sn, i) => {
+            const sc = sectorColor(sn.sector);
+            const isActive = sn.title === currentView.title;
+            const maxLen = isMobile ? 12 : 18;
+            const label = sn.title.length > maxLen ? sn.title.slice(0, maxLen - 1) + '…' : sn.title;
+            return (
+              <button
+                key={sn.id || i}
+                onClick={() => { if (!isActive) switchToSibling(sn); }}
+                disabled={expanding || isActive}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: isMobile ? 3 : 4,
+                  padding: isMobile ? '3px 7px' : '4px 10px',
+                  borderRadius: 20,
+                  border: `1px solid ${isActive ? sc + '60' : '#ffffff12'}`,
+                  background: isActive ? sc + '18' : 'transparent',
+                  color: isActive ? sc : '#777',
+                  fontSize: isMobile ? 8 : 9,
+                  fontFamily: 'monospace',
+                  cursor: expanding || isActive ? 'default' : 'pointer',
+                  opacity: expanding ? 0.4 : 1,
+                  transition: 'all 0.25s',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{
+                  width: isMobile ? 5 : 6, height: isMobile ? 5 : 6,
+                  borderRadius: '50%', background: sc,
+                  boxShadow: isActive ? `0 0 6px ${sc}80` : 'none',
+                  flexShrink: 0,
+                }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── SVG Map ──────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
@@ -538,9 +620,19 @@ export default function LawExplorer() {
                 key={n.id}
                 transform={`translate(${n.x}, ${n.y})`}
                 style={{ cursor: expanding ? 'wait' : 'pointer', transition: 'transform 0.4s ease-in-out' }}
-                onMouseEnter={() => handleNodeEnter(n)}
-                onMouseLeave={() => handleNodeLeave()}
-                onClick={() => { if (!expanding) drillInto(n); }}
+                onMouseEnter={() => { if (!isMobile) handleNodeEnter(n); }}
+                onMouseLeave={() => { if (!isMobile) handleNodeLeave(); }}
+                onClick={() => {
+                  if (expanding) return;
+                  if (isMobile) {
+                    // Mobile : afficher le panel info, pas de drill-in direct
+                    setPanelNode(n);
+                    setHoveredId(n.id);
+                  } else {
+                    // PC : drill-in direct au clic
+                    drillInto(n);
+                  }
+                }}
               >
                 {/* Glow */}
                 <circle cx={0} cy={0} r={nR * 4} fill={`url(#ng-${n.sector})`}
@@ -651,18 +743,11 @@ export default function LawExplorer() {
               <div style={{ fontSize: 17, fontWeight: 600, color: '#E8E6E1', marginBottom: 8, lineHeight: 1.35 }}>{panelNode.title}</div>
               <div style={{ fontSize: 13, color: '#8A8880', lineHeight: 1.65, marginBottom: 16 }}>{panelNode.summary}</div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { if (!expanding) drillInto(panelNode); }}
-                  disabled={expanding}
-                  style={{ flex: 1, padding: '10px 14px', border: `1px solid ${sc}40`, borderRadius: 9, background: `${sc}14`, color: sc, fontSize: 12, fontFamily: 'monospace', cursor: expanding ? 'wait' : 'pointer', transition: 'background 0.2s', opacity: expanding ? 0.5 : 1 }}
-                  onMouseEnter={e => { if (!expanding) e.currentTarget.style.background = `${sc}28`; }}
-                  onMouseLeave={e => e.currentTarget.style.background = `${sc}14`}>
-                  🔍 Explorer les implications
-                </button>
                 <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(`Externalités et besoins législatifs de "${panelNode.title}", conséquence de la loi "${lawQuery}"`)}&mode=explain`; }}
-                  style={{ padding: '10px 14px', border: '1px solid #6BCB8E28', borderRadius: 9, background: '#6BCB8E0A', color: '#6BCB8E', fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
+                  style={{ flex: 1, padding: '10px 14px', border: '1px solid #6BCB8E28', borderRadius: 9, background: '#6BCB8E0A', color: '#6BCB8E', fontSize: 12, fontFamily: 'monospace', cursor: 'pointer', transition: 'background 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#6BCB8E1C'}
                   onMouseLeave={e => e.currentTarget.style.background = '#6BCB8E0A'}>
-                  📖 Expliquer
+                  📖 Expliquer cette implication
                 </button>
               </div>
             </div>
@@ -701,8 +786,8 @@ export default function LawExplorer() {
                 🔍 Explorer
               </button>
               <button onClick={() => { window.location.href = `/?loi=${encodeURIComponent(`Externalités et besoins législatifs de "${panelNode.title}", conséquence de la loi "${lawQuery}"`)}&mode=explain`; }}
-                style={{ padding: '8px 10px', border: '1px solid #6BCB8E28', borderRadius: 8, background: '#6BCB8E0A', color: '#6BCB8E', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
-                📖
+                style={{ flex: 1, padding: '8px 10px', border: '1px solid #6BCB8E28', borderRadius: 8, background: '#6BCB8E0A', color: '#6BCB8E', fontSize: 11, fontFamily: 'monospace', cursor: 'pointer' }}>
+                📖 Expliquer
               </button>
             </div>
           </div>
