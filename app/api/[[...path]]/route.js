@@ -406,6 +406,10 @@ export async function POST(request, { params }) {
       return handleStripePortal(request)
     }
 
+    if (endpoint === 'stripe/verify-session') {
+      return handleVerifySession(request)
+    }
+
     if (endpoint === 'vote') {
       return handleVote(request)
     }
@@ -983,6 +987,43 @@ async function handleStripePortal(request) {
   })
   
   return NextResponse.json({ url: session.url }, { headers: corsHeaders })
+}
+
+// Stripe: Verify checkout session (fallback si webhook manqué)
+async function handleVerifySession(request) {
+  const { session_id } = await request.json()
+  if (!session_id || !process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ ok: false }, { headers: corsHeaders })
+  }
+
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+    const session = await stripe.checkout.sessions.retrieve(session_id)
+
+    if (session.payment_status !== 'paid') {
+      return NextResponse.json({ ok: false }, { headers: corsHeaders })
+    }
+
+    const userId = session.metadata?.user_id
+    const subscriptionId = session.subscription
+
+    if (userId && subscriptionId) {
+      const supabase = createServiceClient()
+      if (supabase) {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+        await supabase.from('profiles').update({
+          is_premium: true,
+          stripe_subscription_id: subscriptionId,
+          premium_until: new Date(subscription.current_period_end * 1000)
+        }).eq('id', userId)
+      }
+    }
+
+    return NextResponse.json({ ok: true }, { headers: corsHeaders })
+  } catch (err) {
+    console.error('verify-session error:', err)
+    return NextResponse.json({ ok: false }, { headers: corsHeaders })
+  }
 }
 
 // Stripe: Webhook handler
