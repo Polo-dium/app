@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle, Edit3, ArrowUpRight, ArrowDownRight, Minus, Lightbulb, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -483,7 +483,7 @@ function DebateSummaryCard({ data, onClose, onCopy, copied, onShare, shareCreati
 }
 
 // Debate Chat Modal - "L'Opposant Féroce"
-function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken, onUpgrade, onSignIn, onShare, shareCreating }) {
+function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Scores, initialResult, getAccessToken, onUpgrade, onSignIn, onShare, shareCreating, onSaveMessages }) {
   const isDebateMode = !!(law1 && law2)
 
   const DEF = { economy: 50, social: 50, ecology: 50, faisabilite: 50, overall: 50 }
@@ -544,6 +544,11 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // Save messages to parent for "Adapter ma loi"
+  useEffect(() => {
+    if (onSaveMessages && messages.length > 0) onSaveMessages(messages)
   }, [messages])
 
   const activeLaw = isDebateMode ? (selectedLaw === 'law2' ? law2 : selectedLaw === 'both' ? null : law1) : law
@@ -936,6 +941,267 @@ function VoteButtons({ law }) {
   )
 }
 
+// ═══════════════════════════════════════════════════════════
+// VotePanel — Vote pour/contre basé sur lawId (UUID)
+// ═══════════════════════════════════════════════════════════
+function VotePanel({ lawId }) {
+  const { user, getAccessToken } = useAuth()
+  const [pour, setPour] = useState(0)
+  const [contre, setContre] = useState(0)
+  const [userVote, setUserVote] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!lawId) return
+    const fetchVotes = async () => {
+      try {
+        const token = await getAccessToken?.()
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`/api/vote-v2/${lawId}`, { headers })
+        const d = await res.json()
+        setPour(d.votes_pour ?? 0)
+        setContre(d.votes_contre ?? 0)
+        setUserVote(d.user_vote ?? null)
+      } catch {}
+    }
+    fetchVotes()
+  }, [lawId])
+
+  const vote = async (v) => {
+    if (loading || !user) return
+    // Optimistic update
+    const prevPour = pour, prevContre = contre, prevVote = userVote
+    if (userVote === v) {
+      // Toggle off
+      setUserVote(null)
+      if (v === 'pour') setPour(p => Math.max(0, p - 1))
+      else setContre(p => Math.max(0, p - 1))
+    } else {
+      if (userVote) { // Switching vote
+        if (userVote === 'pour') setPour(p => Math.max(0, p - 1))
+        else setContre(p => Math.max(0, p - 1))
+      }
+      setUserVote(v)
+      if (v === 'pour') setPour(p => p + 1)
+      else setContre(p => p + 1)
+    }
+
+    setLoading(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/vote-v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ law_id: lawId, vote: v })
+      })
+      const d = await res.json()
+      setPour(d.votes_pour ?? 0)
+      setContre(d.votes_contre ?? 0)
+      setUserVote(d.user_vote ?? null)
+    } catch {
+      // Revert on error
+      setPour(prevPour); setContre(prevContre); setUserVote(prevVote)
+    } finally { setLoading(false) }
+  }
+
+  const total = pour + contre
+  const pourPct = total > 0 ? Math.round((pour / total) * 100) : 50
+
+  if (!lawId) return null
+
+  return (
+    <motion.div className="w-full max-w-2xl mx-auto" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="rounded-xl border border-white/10 bg-card/50 p-4 space-y-3">
+        <p className="text-center text-sm font-medium text-white/80">Voteriez-vous cette loi ?</p>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            onClick={() => vote('pour')}
+            disabled={loading || !user}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-semibold transition-all ${userVote === 'pour' ? 'bg-green-600 border-green-500 text-white scale-105' : 'bg-black/30 border-white/10 text-muted-foreground hover:border-green-500/50 hover:text-green-400'} ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <ThumbsUp className="w-4 h-4" />Pour{pour > 0 && <span className="ml-1">{pour}</span>}
+          </button>
+          <button
+            onClick={() => vote('contre')}
+            disabled={loading || !user}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-semibold transition-all ${userVote === 'contre' ? 'bg-red-700 border-red-600 text-white scale-105' : 'bg-black/30 border-white/10 text-muted-foreground hover:border-red-500/50 hover:text-red-400'} ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <ThumbsDown className="w-4 h-4" />Contre{contre > 0 && <span className="ml-1">{contre}</span>}
+          </button>
+        </div>
+        {total > 0 && (
+          <div className="space-y-1">
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden flex">
+              <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${pourPct}%` }} />
+              <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${100 - pourPct}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span className="text-green-400">{pourPct}% pour</span>
+              <span>{total} vote{total > 1 ? 's' : ''}</span>
+              <span className="text-red-400">{100 - pourPct}% contre</span>
+            </div>
+          </div>
+        )}
+        {!user && <p className="text-center text-xs text-muted-foreground">Connectez-vous pour voter</p>}
+      </div>
+    </motion.div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// ScoreDiff — Comparaison scores v1 vs v2
+// ═══════════════════════════════════════════════════════════
+function ScoreDiff({ currentScores, previousScores, currentVersion }) {
+  if (!previousScores || !currentScores || !currentVersion || currentVersion <= 1) return null
+
+  const items = [
+    { key: 'economy', label: 'Économie', emoji: '💰' },
+    { key: 'social', label: 'Social', emoji: '❤️' },
+    { key: 'ecology', label: 'Écologie', emoji: '🌿' },
+    { key: 'faisabilite', label: 'Faisabilité', emoji: '⚙️' },
+    { key: 'overall', label: 'Global', emoji: '⭐' },
+  ]
+
+  return (
+    <motion.div className="w-full max-w-2xl mx-auto" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+        <div className="flex items-center gap-2 justify-center">
+          <span className="text-xs font-semibold text-purple-400 uppercase tracking-widest">Version {currentVersion} — Évolution des scores</span>
+        </div>
+        <div className="grid grid-cols-5 gap-2">
+          {items.map(({ key, label, emoji }) => {
+            const prev = previousScores[key] ?? 50
+            const curr = currentScores[key] ?? 50
+            const diff = curr - prev
+            return (
+              <div key={key} className="text-center space-y-1">
+                <div className="text-xs text-muted-foreground">{emoji} {label}</div>
+                <div className="text-xs text-white/50">{prev}</div>
+                <div className="flex items-center justify-center gap-0.5">
+                  {diff > 0 ? <ArrowUpRight className="w-3 h-3 text-green-400" /> : diff < 0 ? <ArrowDownRight className="w-3 h-3 text-red-400" /> : <Minus className="w-3 h-3 text-muted-foreground" />}
+                  <span className={`text-lg font-bold ${diff > 0 ? 'text-green-400' : diff < 0 ? 'text-red-400' : 'text-white'}`}>{curr}</span>
+                </div>
+                {diff !== 0 && <div className={`text-xs font-medium ${diff > 0 ? 'text-green-400' : 'text-red-400'}`}>{diff > 0 ? '+' : ''}{diff}</div>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// AdaptLawModal — Modifier sa loi après débat
+// ═══════════════════════════════════════════════════════════
+function AdaptLawModal({ open, onClose, originalLaw, chatMessages, getAccessToken, onReAnalyze }) {
+  const [editedLaw, setEditedLaw] = useState(originalLaw || '')
+  const [suggestions, setSuggestions] = useState([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [appliedSuggestions, setAppliedSuggestions] = useState(new Set())
+
+  useEffect(() => {
+    if (open && originalLaw) {
+      setEditedLaw(originalLaw)
+      setSuggestions([])
+      setAppliedSuggestions(new Set())
+      fetchSuggestions()
+    }
+  }, [open])
+
+  const fetchSuggestions = async () => {
+    if (!originalLaw || !chatMessages?.length) return
+    setLoadingSuggestions(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ law: originalLaw, messages: chatMessages })
+      })
+      const data = await res.json()
+      if (data.suggestions) setSuggestions(data.suggestions)
+    } catch (err) {
+      console.error('Suggestions error:', err)
+    } finally { setLoadingSuggestions(false) }
+  }
+
+  const applySuggestion = (idx, modification) => {
+    setEditedLaw(prev => prev + ' ' + modification)
+    setAppliedSuggestions(prev => new Set([...prev, idx]))
+  }
+
+  const handleReAnalyze = () => {
+    if (!editedLaw.trim()) return
+    onReAnalyze(editedLaw.trim())
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-white/10 max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Edit3 className="w-5 h-5 text-blue-400" />
+            Adapter ma loi
+          </DialogTitle>
+          <DialogDescription>Modifiez votre proposition en tenant compte du débat</DialogDescription>
+        </DialogHeader>
+
+        {/* Suggestions */}
+        <div className="flex-1 overflow-y-auto space-y-4">
+          {loadingSuggestions ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground p-3">
+              <Loader2 className="w-4 h-4 animate-spin" />Analyse du débat en cours...
+            </div>
+          ) : suggestions.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-yellow-400">
+                <Lightbulb className="w-4 h-4" />Suggestions basées sur le débat
+              </div>
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => !appliedSuggestions.has(i) && applySuggestion(i, s.modification)}
+                  disabled={appliedSuggestions.has(i)}
+                  className={`w-full text-left p-3 rounded-lg border transition-all ${appliedSuggestions.has(i) ? 'border-green-500/30 bg-green-500/10 opacity-70' : 'border-white/10 bg-white/5 hover:border-blue-500/30 hover:bg-blue-500/5'}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {appliedSuggestions.has(i) ? <Check className="w-4 h-4 text-green-400 mt-0.5 shrink-0" /> : <ChevronRight className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />}
+                    <div>
+                      <p className="text-sm text-white font-medium">{s.modification}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{s.raison}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Editor */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white/80">Votre proposition modifiée</label>
+            <textarea
+              value={editedLaw}
+              onChange={e => setEditedLaw(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-white/10 bg-background p-3 text-sm text-white resize-y focus:outline-none focus:border-blue-500/50"
+              placeholder="Modifiez votre proposition de loi..."
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-3 border-t border-white/10">
+          <Button onClick={handleReAnalyze} disabled={!editedLaw.trim() || editedLaw.trim() === originalLaw} className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500">
+            <Sparkles className="w-4 h-4 mr-2" />Re-analyser cette version
+          </Button>
+          <Button onClick={onClose} variant="outline" className="border-white/20">Annuler</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function LeaderboardPanel({ onSelectLaw }) {
   const [top, setTop] = useState([])
   const [flop, setFlop] = useState([])
@@ -1005,6 +1271,13 @@ function ButterflyApp() {
   const [sharePanel, setSharePanel] = useState(null)   // { shareId, proposition, scoreGlobal } | null
   const [shareCreating, setShareCreating] = useState(false)
   const [proposalSeed, setProposalSeed] = useState(0)
+  // ── Versioning + Vote + Adapt ──
+  const [lawId, setLawId] = useState(null)             // UUID from laws_history
+  const [lawVersion, setLawVersion] = useState(1)
+  const [parentId, setParentId] = useState(null)
+  const [previousScores, setPreviousScores] = useState(null)
+  const [showAdaptModal, setShowAdaptModal] = useState(false)
+  const [debateMessages, setDebateMessages] = useState([]) // saved from debate for suggestions
 
   // ── Lecture des URL params (ex: depuis l'Explorateur) ─
   useEffect(() => {
@@ -1025,17 +1298,31 @@ function ButterflyApp() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const cardRef = useRef(null)
 
-  const analyzeLaw = async () => {
-    if (!lawText.trim()) return
+  const analyzeLaw = async (overrideLaw, { asRevision = false } = {}) => {
+    const text = overrideLaw || lawText
+    if (!text.trim()) return
+    // If re-analyzing, save current scores as previous
+    if (asRevision && result?.scores) {
+      setPreviousScores({ ...result.scores })
+    }
+    if (overrideLaw) setLawText(overrideLaw)
     setLoading(true); setError(null); setResult(null)
     try {
       const token = await getAccessToken()
-      const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
-      const response = await fetch('/api/analyze', { method: 'POST', headers, body: JSON.stringify({ law: lawText.trim() }) })
+      const hdrs = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+      const payload = { law: text.trim() }
+      if (asRevision && lawId) {
+        payload.parent_id = parentId || lawId  // chain to root
+        payload.version = (lawVersion || 1) + 1
+      }
+      const response = await fetch('/api/analyze', { method: 'POST', headers: hdrs, body: JSON.stringify(payload) })
       const data = await response.json()
       if (response.status === 429) { setRateLimitExceeded({ userTier: data.userTier, resetAt: data.resetAt }); return }
       if (!response.ok) throw new Error(data.error || 'Erreur lors de l\'analyse')
       setResult(data)
+      setLawId(data.lawId || null)
+      setLawVersion(data.version || 1)
+      if (data.parentId) setParentId(data.parentId)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -1108,7 +1395,7 @@ function ButterflyApp() {
     }
   }
   
-  const reset = () => { setLawText(''); setResult(null); setExplainText(''); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null); setRateLimitExceeded(null) }
+  const reset = () => { setLawText(''); setResult(null); setExplainText(''); setExplainResult(''); setExplainSourceCount(0); setExplainSearching(''); setError(null); setRateLimitExceeded(null); setLawId(null); setLawVersion(1); setParentId(null); setPreviousScores(null); setDebateMessages([]) }
 
   const hasResults = mode === 'single' ? result : mode === 'explain' ? explainResult : false
   
@@ -1119,7 +1406,8 @@ function ButterflyApp() {
       {rateLimitExceeded && <SoftWall userTier={rateLimitExceeded.userTier} resetAt={rateLimitExceeded.resetAt} onSignIn={() => { setRateLimitExceeded(null); setShowAuthModal(true) }} onUpgrade={() => { setRateLimitExceeded(null); handleUpgrade() }} />}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
       {sharePanel && <SharePanel shareId={sharePanel.shareId} proposition={sharePanel.proposition} scoreGlobal={sharePanel.scoreGlobal} onClose={() => setSharePanel(null)} />}
-      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={lawText} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} onShare={openSharePanel} shareCreating={shareCreating} />
+      <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={lawText} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} onShare={openSharePanel} shareCreating={shareCreating} onSaveMessages={(msgs) => setDebateMessages(msgs)} />
+      <AdaptLawModal open={showAdaptModal} onClose={() => setShowAdaptModal(false)} originalLaw={lawText} chatMessages={debateMessages} getAccessToken={getAccessToken} onReAnalyze={(newLaw) => { analyzeLaw(newLaw, { asRevision: true }) }} />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
@@ -1267,7 +1555,9 @@ function ButterflyApp() {
               {mode === 'single' && result ? (
                 <>
                   <ResultCard result={result} lawText={lawText} cardRef={cardRef} />
-                  <VoteButtons law={lawText} />
+                  {lawVersion > 1 && previousScores && <ScoreDiff currentScores={result.scores} previousScores={previousScores} currentVersion={lawVersion} />}
+                  {lawId && <VotePanel lawId={lawId} />}
+                  {!lawId && <VoteButtons law={lawText} />}
                   <div className="flex justify-center gap-4 flex-wrap">
                     {user ? (
                       <Button onClick={() => setShowDebateChat(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500">
@@ -1276,6 +1566,11 @@ function ButterflyApp() {
                     ) : (
                       <Button onClick={() => setShowAuthModal(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 opacity-80">
                         <Lock className="w-3 h-3 mr-1.5" /><MessageSquare className="w-4 h-4 mr-2" />Débattre avec l'IA
+                      </Button>
+                    )}
+                    {user && debateMessages.length > 0 && (
+                      <Button onClick={() => setShowAdaptModal(true)} className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500">
+                        <Edit3 className="w-4 h-4 mr-2" />Adapter ma loi
                       </Button>
                     )}
                     <Button onClick={() => openSharePanel({ type: 'analyse', proposition: lawText, score_global: result.scores.overall, scores: result.scores, gagnants: result.winners, perdants: result.losers, effet_papillon: result.butterfly_effect })} disabled={shareCreating} variant="outline" className="border-white/20 hover:bg-white/10">{shareCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}Partager sur vos réseaux</Button>

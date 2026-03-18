@@ -344,13 +344,13 @@ async function analyzeLaw(law) {
   return analysis
 }
 
-// Save law to history
-async function saveLawToHistory(law, analysis, userId, ipAddress, isDebate = false) {
+// Save law to history — returns the created record ID, or null
+async function saveLawToHistory(law, analysis, userId, ipAddress, isDebate = false, { parentId = null, version = 1 } = {}) {
   const supabase = createServiceClient()
-  if (!supabase) return // Skip if not configured
-  
+  if (!supabase) return null
+
   try {
-    await supabase.from('laws_history').insert({
+    const { data, error } = await supabase.from('laws_history').insert({
       user_id: userId,
       ip_address: ipAddress,
       law_text: law,
@@ -361,10 +361,16 @@ async function saveLawToHistory(law, analysis, userId, ipAddress, isDebate = fal
       score_social: analysis.scores.social,
       score_ecology: analysis.scores.ecology,
       score_overall: analysis.scores.overall,
-      is_debate: isDebate
-    })
+      is_debate: isDebate,
+      parent_id: parentId || null,
+      version: version || 1,
+    }).select('id').single()
+
+    if (error) { console.error('Save history error:', error); return null }
+    return data?.id || null
   } catch (err) {
     console.error('Save history error:', err)
+    return null
   }
 }
 
@@ -415,6 +421,14 @@ export async function POST(request, { params }) {
       return handleVote(request)
     }
 
+    if (endpoint === 'vote-v2') {
+      return handleVoteV2(request)
+    }
+
+    if (endpoint === 'suggestions') {
+      return handleSuggestions(request)
+    }
+
     return NextResponse.json(
       { error: 'Endpoint not found' },
       { status: 404, headers: corsHeaders }
@@ -457,35 +471,52 @@ export async function GET(request, { params }) {
     return handleGetVotes(request)
   }
 
+  if (endpoint.startsWith('vote-v2/')) {
+    const lawId = endpoint.replace('vote-v2/', '')
+    return handleGetVoteV2(request, lawId)
+  }
+
   return NextResponse.json({ message: 'Butterfly.gov API' }, { headers: corsHeaders })
+}
+
+// DELETE handler
+export async function DELETE(request, { params }) {
+  const path = params?.path || []
+  const endpoint = path.join('/')
+
+  if (endpoint === 'vote-v2') {
+    return handleDeleteVoteV2(request)
+  }
+
+  return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders })
 }
 
 // Analyze single law
 async function handleAnalyze(request) {
   const body = await request.json()
-  const { law } = body
-  
+  const { law, parent_id, version } = body
+
   if (!law || typeof law !== 'string' || law.trim().length === 0) {
     return NextResponse.json({ error: 'Le champ "law" est requis' }, { status: 400, headers: corsHeaders })
   }
-  
+
   const user = await getUser(request)
   const ipAddress = getClientIP(request)
-  
+
   let userTier = 'anonymous'
   let identifier = ipAddress
   let identifierType = 'ip'
-  
+
   if (user) {
     identifierType = 'user'
     identifier = user.id
     userTier = user.profile?.is_premium ? 'premium' : 'free'
   }
-  
+
   const rateLimit = await checkRateLimit(identifier, identifierType, userTier)
-  
+
   if (!rateLimit.allowed) {
-    trackAnalysis({ mode: 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, status: 'rate_limited' }).catch(() => {})
+    trackAnalysis({ mode: parent_id ? 'revision' : 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, status: 'rate_limited' }).catch(() => {})
     return NextResponse.json({
       error: 'rate_limit_exceeded',
       message: rateLimit.message,
@@ -498,12 +529,18 @@ async function handleAnalyze(request) {
   const startTime = Date.now()
   try {
     const analysis = await analyzeLaw(law)
-    await saveLawToHistory(law, analysis, user?.id, ipAddress)
+    const lawId = await saveLawToHistory(law, analysis, user?.id, ipAddress, false, {
+      parentId: parent_id || null,
+      version: version || 1,
+    })
 
-    trackAnalysis({ mode: 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, modelUsed: userTier === 'premium' ? MODEL_PREMIUM : MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'success' }).catch(() => {})
+    trackAnalysis({ mode: parent_id ? 'revision' : 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, modelUsed: userTier === 'premium' ? MODEL_PREMIUM : MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'success' }).catch(() => {})
 
     return NextResponse.json({
       ...analysis,
+      lawId,
+      version: version || 1,
+      parentId: parent_id || null,
       rateLimit: { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt }
     }, { headers: corsHeaders })
 
@@ -1130,4 +1167,167 @@ async function handleStripeWebhook(request) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+// ═══════════════════════════════════════════════════════════
+// Suggestions — Génère des suggestions d'adaptation après débat
+// ═══════════════════════════════════════════════════════════
+async function handleSuggestions(request) {
+  const user = await getUser(request)
+  if (!user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders })
+  }
+
+  const body = await request.json()
+  const { law, messages: chatMessages } = body
+
+  if (!law || !chatMessages || !Array.isArray(chatMessages) || chatMessages.length === 0) {
+    return NextResponse.json({ error: 'Paramètres manquants (law + messages)' }, { status: 400, headers: corsHeaders })
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY non configurée' }, { status: 500, headers: corsHeaders })
+  }
+
+  const userTier = user.profile?.is_premium ? 'premium' : 'free'
+  const model = userTier === 'premium' ? MODEL_PREMIUM : MODEL_FREE
+
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const convoText = chatMessages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => `${m.role === 'user' ? 'CITOYEN' : "L'OPPOSANT"}: ${m.content}`)
+      .join('\n\n')
+
+    const message = await client.messages.create({
+      model,
+      max_tokens: 1200,
+      system: `Tu es un expert en politique législative française. Retourne UNIQUEMENT un objet JSON valide, sans markdown ni texte autour.`,
+      messages: [{
+        role: 'user',
+        content: `Voici le débat entre un citoyen et l'IA sur une proposition de loi.
+
+Proposition originale : "${law.trim()}"
+
+Débat :
+${convoText}
+
+Génère 3 à 5 suggestions concrètes de modification de la proposition, basées sur les arguments échangés pendant le débat. Chaque suggestion doit :
+- Être une modification précise et actionnable
+- Indiquer quel argument du débat la motive
+- Être formulée de façon neutre
+
+Réponds en JSON :
+{
+  "suggestions": [
+    {
+      "modification": "Description de la modification",
+      "raison": "Argument du débat qui la motive"
+    }
+  ]
+}`
+      }]
+    })
+
+    const text = message.content[0]?.text || ''
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('Pas de JSON')
+
+    const data = JSON.parse(jsonMatch[0])
+    trackAnalysis({ mode: 'suggestions', userId: user.id, ip: getClientIP(request), tier: userTier, proposition: law, modelUsed: model, status: 'success' }).catch(() => {})
+    return NextResponse.json(data, { headers: corsHeaders })
+  } catch (err) {
+    console.error('[Suggestions] Error:', err.message)
+    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders })
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Vote V2 — Basé sur law_id (UUID de laws_history)
+// ═══════════════════════════════════════════════════════════
+
+// POST /api/vote-v2 — { law_id, vote: 'pour'|'contre' }
+async function handleVoteV2(request) {
+  const user = await getUser(request)
+  if (!user) {
+    return NextResponse.json({ error: 'Connectez-vous pour voter' }, { status: 401, headers: corsHeaders })
+  }
+
+  const body = await request.json()
+  const { law_id, vote } = body
+
+  if (!law_id || !['pour', 'contre'].includes(vote)) {
+    return NextResponse.json({ error: 'Paramètres invalides (law_id + vote pour|contre)' }, { status: 400, headers: corsHeaders })
+  }
+
+  const supabase = createServiceClient()
+  if (!supabase) return NextResponse.json({ error: 'Service non disponible' }, { status: 500, headers: corsHeaders })
+
+  try {
+    // Upsert: insert or update
+    const { data: existing } = await supabase
+      .from('votes_v2')
+      .select('id, vote')
+      .eq('law_id', law_id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (existing) {
+      if (existing.vote === vote) {
+        // Same vote → remove it (toggle off)
+        await supabase.from('votes_v2').delete().eq('id', existing.id)
+      } else {
+        // Different vote → update
+        await supabase.from('votes_v2').update({ vote }).eq('id', existing.id)
+      }
+    } else {
+      // New vote
+      await supabase.from('votes_v2').insert({ law_id, user_id: user.id, vote })
+    }
+
+    // Return updated counts
+    const counts = await getVoteCounts(supabase, law_id, user.id)
+    trackAnalysis({ mode: 'vote', userId: user.id, ip: getClientIP(request), tier: user.profile?.is_premium ? 'premium' : 'free', proposition: law_id, status: 'success' }).catch(() => {})
+    return NextResponse.json(counts, { headers: corsHeaders })
+  } catch (err) {
+    console.error('[Vote V2] Error:', err.message)
+    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders })
+  }
+}
+
+// GET /api/vote-v2/:law_id
+async function handleGetVoteV2(request, lawId) {
+  const supabase = createServiceClient()
+  if (!supabase) return NextResponse.json({ votes_pour: 0, votes_contre: 0, user_vote: null }, { headers: corsHeaders })
+
+  const user = await getUser(request)
+  const counts = await getVoteCounts(supabase, lawId, user?.id)
+  return NextResponse.json(counts, { headers: corsHeaders })
+}
+
+// DELETE /api/vote-v2 — { law_id }
+async function handleDeleteVoteV2(request) {
+  const user = await getUser(request)
+  if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders })
+
+  const body = await request.json()
+  const { law_id } = body
+  if (!law_id) return NextResponse.json({ error: 'law_id requis' }, { status: 400, headers: corsHeaders })
+
+  const supabase = createServiceClient()
+  if (!supabase) return NextResponse.json({ error: 'Service non disponible' }, { status: 500, headers: corsHeaders })
+
+  await supabase.from('votes_v2').delete().eq('law_id', law_id).eq('user_id', user.id)
+  const counts = await getVoteCounts(supabase, law_id, user.id)
+  return NextResponse.json(counts, { headers: corsHeaders })
+}
+
+// Helper: get vote counts + user's vote for a law
+async function getVoteCounts(supabase, lawId, userId) {
+  const { data: allVotes } = await supabase.from('votes_v2').select('vote, user_id').eq('law_id', lawId)
+  const votes = allVotes || []
+  const votes_pour = votes.filter(v => v.vote === 'pour').length
+  const votes_contre = votes.filter(v => v.vote === 'contre').length
+  const userVote = userId ? votes.find(v => v.user_id === userId)?.vote || null : null
+  return { votes_pour, votes_contre, votes_total: votes_pour + votes_contre, user_vote: userVote }
 }
