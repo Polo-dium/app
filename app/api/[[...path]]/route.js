@@ -875,44 +875,50 @@ async function handleGetRateLimitStatus(request) {
 // Stripe: Create checkout session
 async function handleCreateCheckout(request) {
   const user = await getUser(request)
-  
+
   if (!user) {
     return NextResponse.json({ error: 'Vous devez être connecté pour vous abonner' }, { status: 401, headers: corsHeaders })
   }
-  
+
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_PREMIUM_PRICE_ID) {
-    return NextResponse.json({ error: 'Stripe non configuré. Ajoutez STRIPE_SECRET_KEY et STRIPE_PREMIUM_PRICE_ID dans .env' }, { status: 500, headers: corsHeaders })
+    return NextResponse.json({ error: `Stripe non configuré — manque : ${!process.env.STRIPE_SECRET_KEY ? 'STRIPE_SECRET_KEY ' : ''}${!process.env.STRIPE_PREMIUM_PRICE_ID ? 'STRIPE_PREMIUM_PRICE_ID' : ''}` }, { status: 500, headers: corsHeaders })
   }
-  
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-  const supabase = createServiceClient()
-  
-  let customerId = user.profile?.stripe_customer_id
-  
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email,
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://butterflygov.com'
+
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+    const supabase = createServiceClient()
+
+    let customerId = user.profile?.stripe_customer_id
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: user.id }
+      })
+      customerId = customer.id
+      if (supabase) {
+        await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: process.env.STRIPE_PREMIUM_PRICE_ID, quantity: 1 }],
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/`,
+      allow_promotion_codes: true,
       metadata: { user_id: user.id }
     })
-    customerId = customer.id
-    
-    if (supabase) {
-      await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
-    }
+
+    return NextResponse.json({ url: session.url }, { headers: corsHeaders })
+  } catch (err) {
+    console.error('Stripe checkout error:', err)
+    return NextResponse.json({ error: err.message || 'Erreur Stripe' }, { status: 500, headers: corsHeaders })
   }
-  
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: 'subscription',
-    payment_method_types: ['card'],
-    line_items: [{ price: process.env.STRIPE_PREMIUM_PRICE_ID, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/`,
-    allow_promotion_codes: true,
-    metadata: { user_id: user.id }
-  })
-  
-  return NextResponse.json({ url: session.url }, { headers: corsHeaders })
 }
 
 // Stripe: Cancel subscription
