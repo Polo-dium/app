@@ -257,9 +257,10 @@ function UserMenu() {
         const data = await res.json()
         window.location.href = data.url
       } else {
-        alert('Impossible d\'ouvrir la page de paiement')
+        const err = await res.json().catch(() => ({}))
+        alert('Erreur : ' + (err.error || res.status))
       }
-    } catch { alert('Erreur réseau') } finally { setUpgrading(false) }
+    } catch (e) { alert('Erreur réseau : ' + e.message) } finally { setUpgrading(false) }
   }
 
   const handleUnsubscribe = async () => {
