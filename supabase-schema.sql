@@ -124,7 +124,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_cancel_at_period_end BOOLEA
 
 -- 11. Vue pour le leaderboard
 CREATE OR REPLACE VIEW leaderboard_view AS
-SELECT 
+SELECT
   id,
   law_text,
   score_economy,
@@ -136,3 +136,24 @@ FROM laws_history
 WHERE score_overall IS NOT NULL
 ORDER BY score_overall DESC
 LIMIT 100;
+
+-- 12. Table des votes utilisateurs
+CREATE TABLE IF NOT EXISTS votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  law_text TEXT NOT NULL,
+  vote INTEGER NOT NULL CHECK (vote IN (1, -1)),
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  ip_address TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Un seul vote par user par loi, ou par IP par loi (si anonyme)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_user_law ON votes(law_text, user_id) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_ip_law ON votes(law_text, ip_address) WHERE user_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_votes_law_text ON votes(law_text);
+CREATE INDEX IF NOT EXISTS idx_votes_vote ON votes(vote);
+
+ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view votes" ON votes FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert votes" ON votes FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can update votes" ON votes FOR UPDATE USING (true);

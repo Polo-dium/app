@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -695,9 +695,12 @@ function DebateChatModal({ open, onClose, law, law1, law2, law1Scores, law2Score
               effet_papillon: summaryData.conclusion || summaryData.keyPoint || initialResult?.butterfly_effect || '',
             }
             const handleShare = onShare ? () => onShare(sharePayload) : null
-            return summaryData.raw
-              ? <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30"><div className="flex justify-between items-center mb-2"><p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé</p><div className="flex gap-2">{handleShare && <button onClick={handleShare} disabled={shareCreating} className="text-xs text-white flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 disabled:opacity-50">{shareCreating ? <Loader2 className="w-3 h-3 animate-spin inline mr-1"/> : <Share2 className="w-3 h-3 inline mr-1"/>}Partager</button>}<button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">{copied ? '✓ Copié' : 'Copier'}</button><button onClick={() => setSummaryMode(false)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">× Fermer</button></div></div><p className="text-sm text-white/90 whitespace-pre-wrap">{summaryData.raw}</p></div>
-              : <DebateSummaryCard data={summaryData} onClose={() => setSummaryMode(false)} onCopy={copySummary} copied={copied} onShare={handleShare} shareCreating={shareCreating} />
+            return <div className="space-y-3">
+              {summaryData.raw
+                ? <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30"><div className="flex justify-between items-center mb-2"><p className="text-xs text-purple-400 uppercase font-semibold">📋 Résumé</p><div className="flex gap-2">{handleShare && <button onClick={handleShare} disabled={shareCreating} className="text-xs text-white flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 disabled:opacity-50">{shareCreating ? <Loader2 className="w-3 h-3 animate-spin inline mr-1"/> : <Share2 className="w-3 h-3 inline mr-1"/>}Partager</button>}<button onClick={copySummary} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">{copied ? '✓ Copié' : 'Copier'}</button><button onClick={() => setSummaryMode(false)} className="text-xs text-muted-foreground hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10">× Fermer</button></div></div><p className="text-sm text-white/90 whitespace-pre-wrap">{summaryData.raw}</p></div>
+                : <DebateSummaryCard data={summaryData} onClose={() => setSummaryMode(false)} onCopy={copySummary} copied={copied} onShare={handleShare} shareCreating={shareCreating} />}
+              {!isDebateMode && law && <VoteButtons law={law} />}
+            </div>
           })() : (
             <div className="space-y-4 py-2">
               {firstMsgLoading && (
@@ -855,38 +858,98 @@ function HistoryPanel({ onSelectLaw }) {
 }
 
 // Leaderboard Panel
+function VoteButtons({ law }) {
+  const { getAccessToken } = useAuth()
+  const [upvotes, setUpvotes] = useState(0)
+  const [downvotes, setDownvotes] = useState(0)
+  const [userVote, setUserVote] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!law) return
+    fetch(`/api/votes?law=${encodeURIComponent(law.trim())}`)
+      .then(r => r.json())
+      .then(d => { setUpvotes(d.upvotes ?? 0); setDownvotes(d.downvotes ?? 0); setUserVote(d.userVote ?? null) })
+      .catch(() => {})
+  }, [law])
+
+  const vote = async (v) => {
+    if (loading) return
+    setLoading(true)
+    try {
+      const token = await getAccessToken()
+      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      const res = await fetch('/api/vote', { method: 'POST', headers, body: JSON.stringify({ law: law.trim(), vote: v }) })
+      const d = await res.json()
+      setUpvotes(d.upvotes ?? 0)
+      setDownvotes(d.downvotes ?? 0)
+      setUserVote(d.userVote ?? null)
+    } catch { /* silence */ } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-4">
+      <p className="text-xs text-muted-foreground">Votre avis sur cette loi&nbsp;:</p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => vote(1)}
+          disabled={loading}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium transition-all ${userVote === 1 ? 'bg-green-600 border-green-500 text-white' : 'bg-black/30 border-white/10 text-muted-foreground hover:border-green-500/50 hover:text-green-400'}`}
+        >
+          <ThumbsUp className="w-4 h-4" />{upvotes > 0 && <span>{upvotes}</span>}
+        </button>
+        <button
+          onClick={() => vote(-1)}
+          disabled={loading}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium transition-all ${userVote === -1 ? 'bg-red-700 border-red-600 text-white' : 'bg-black/30 border-white/10 text-muted-foreground hover:border-red-500/50 hover:text-red-400'}`}
+        >
+          <ThumbsDown className="w-4 h-4" />{downvotes > 0 && <span>{downvotes}</span>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function LeaderboardPanel({ onSelectLaw }) {
-  const [leaderboard, setLeaderboard] = useState(null)
-  const [flop, setFlop] = useState(null)
+  const [top, setTop] = useState([])
+  const [flop, setFlop] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeCategory, setActiveCategory] = useState('overall')
-  useEffect(() => { fetch('/api/leaderboard').then(r => r.json()).then(data => { setLeaderboard(data.leaderboard); setFlop(data.flop); setLoading(false) }).catch(() => setLoading(false)) }, [])
+  useEffect(() => {
+    fetch('/api/leaderboard').then(r => r.json()).then(data => { setTop(data.top || []); setFlop(data.flop || []); setLoading(false) }).catch(() => setLoading(false))
+  }, [])
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-yellow-400" /></div>
-  if (!leaderboard || Object.values(leaderboard).every(arr => arr.length === 0)) return <div className="text-center py-8 text-muted-foreground"><Award className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Pas encore de classement</p></div>
-  const categories = [{ key: 'overall', label: '🏆 Global', color: 'text-yellow-400' }, { key: 'economy', label: '💰 Éco', color: 'text-blue-400' }, { key: 'social', label: '❤️ Social', color: 'text-pink-400' }, { key: 'ecology', label: '🌿 Écolo', color: 'text-green-400' }]
-  const flopItems = flop?.[activeCategory] || []
+  if (top.length === 0 && flop.length === 0) return (
+    <div className="text-center py-8 text-muted-foreground">
+      <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
+      <p>Pas encore de votes</p>
+      <p className="text-xs mt-1">Analysez une loi et votez pour qu'elle apparaisse ici !</p>
+    </div>
+  )
   return (
     <div className="space-y-4">
       {onSelectLaw && <p className="text-xs text-muted-foreground text-center">Cliquez sur une loi pour la tester</p>}
-      <div className="flex gap-2 flex-wrap">{categories.map(cat => (<button key={cat.key} onClick={() => setActiveCategory(cat.key)} className={`px-3 py-1 rounded-full text-xs transition-colors ${activeCategory === cat.key ? 'bg-white/20 text-white' : 'bg-black/30 text-muted-foreground hover:bg-white/10'}`}>{cat.label}</button>))}</div>
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 mb-2"><Trophy className="w-4 h-4 text-yellow-400" /><span className="text-xs font-semibold text-yellow-400 uppercase">Top</span></div>
-        {(leaderboard[activeCategory] || []).map((item, i) => (
-          <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-yellow-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'}`}>{i + 1}</div>
-            <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
-            <span className={`font-bold ${categories.find(c => c.key === activeCategory)?.color}`}>{item.score}</span>
-          </motion.div>
-        ))}
-      </div>
-      {flopItems.length > 0 && (
+      {top.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 mb-2"><ThumbsUp className="w-4 h-4 text-green-400" /><span className="text-xs font-semibold text-green-400 uppercase">Les plus soutenues</span></div>
+          {top.map((item, i) => (
+            <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-green-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'}`}>{i + 1}</div>
+              <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
+              <span className="font-bold text-green-400 flex items-center gap-1"><ThumbsUp className="w-3 h-3" />{item.count}</span>
+            </motion.div>
+          ))}
+        </div>
+      )}
+      {flop.length > 0 && (
         <div className="space-y-1 pt-2 border-t border-white/10">
-          <div className="flex items-center gap-2 mb-2"><Skull className="w-4 h-4 text-red-400" /><span className="text-xs font-semibold text-red-400 uppercase">Flop</span></div>
-          {flopItems.map((item, i) => (
+          <div className="flex items-center gap-2 mb-2"><ThumbsDown className="w-4 h-4 text-red-400" /><span className="text-xs font-semibold text-red-400 uppercase">Les plus rejetées</span></div>
+          {flop.map((item, i) => (
             <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-red-900/30 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-red-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-red-900/50 text-red-300">{i + 1}</div>
               <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
-              <span className="font-bold text-red-400">{item.score}</span>
+              <span className="font-bold text-red-400 flex items-center gap-1"><ThumbsDown className="w-3 h-3" />{item.count}</span>
             </motion.div>
           ))}
         </div>
@@ -1164,6 +1227,7 @@ function ButterflyApp() {
               {mode === 'single' && result ? (
                 <>
                   <ResultCard result={result} lawText={lawText} cardRef={cardRef} />
+                  <VoteButtons law={lawText} />
                   <div className="flex justify-center gap-4 flex-wrap">
                     {user ? (
                       <Button onClick={() => setShowDebateChat(true)} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500">
@@ -1198,6 +1262,8 @@ function ButterflyApp() {
                   </div>
                   <div className="bg-card rounded-xl border border-white/10 p-6 text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{explainResult}</div>
                   {!explainLoading && (
+                    <>
+                    <VoteButtons law={explainText} />
                     <div className="flex justify-center gap-3 flex-wrap">
                       <Button onClick={() => { setMode('single'); setLawText(explainText); setExplainResult('') }} variant="outline" className="border-green-500/30 hover:bg-green-500/10 text-green-400">
                         <Sparkles className="w-4 h-4 mr-2" />Analyser l'impact →
@@ -1207,6 +1273,7 @@ function ButterflyApp() {
                       </Button>
                       <Button onClick={reset} variant="outline" className="border-white/20 hover:bg-white/10"><RotateCcw className="w-4 h-4 mr-2" />Nouvelle recherche</Button>
                     </div>
+                    </>
                   )}
                 </motion.div>
               ) : null}

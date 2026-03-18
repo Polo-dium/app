@@ -405,7 +405,11 @@ export async function POST(request, { params }) {
     if (endpoint === 'stripe/portal') {
       return handleStripePortal(request)
     }
-    
+
+    if (endpoint === 'vote') {
+      return handleVote(request)
+    }
+
     return NextResponse.json(
       { error: 'Endpoint not found' },
       { status: 404, headers: corsHeaders }
@@ -443,7 +447,11 @@ export async function GET(request, { params }) {
   if (endpoint === 'rate-limit-status') {
     return handleGetRateLimitStatus(request)
   }
-  
+
+  if (endpoint === 'votes') {
+    return handleGetVotes(request)
+  }
+
   return NextResponse.json({ message: 'Butterfly.gov API' }, { headers: corsHeaders })
 }
 
@@ -715,34 +723,118 @@ async function handleGetHistory(request) {
 async function handleGetLeaderboard(request) {
   const supabase = createServiceClient()
   if (!supabase) {
-    return NextResponse.json({ leaderboard: { economy: [], social: [], ecology: [], overall: [] } }, { headers: corsHeaders })
+    return NextResponse.json({ top: [], flop: [] }, { headers: corsHeaders })
   }
-  
-  const [topEconomy, topSocial, topEcology, topOverall, flopEconomy, flopSocial, flopEcology, flopOverall] = await Promise.all([
-    supabase.from('laws_history').select('law_text, score_economy').order('score_economy', { ascending: false }).limit(5),
-    supabase.from('laws_history').select('law_text, score_social').order('score_social', { ascending: false }).limit(5),
-    supabase.from('laws_history').select('law_text, score_ecology').order('score_ecology', { ascending: false }).limit(5),
-    supabase.from('laws_history').select('law_text, score_overall').order('score_overall', { ascending: false }).limit(5),
-    supabase.from('laws_history').select('law_text, score_economy').order('score_economy', { ascending: true }).limit(5),
-    supabase.from('laws_history').select('law_text, score_social').order('score_social', { ascending: true }).limit(5),
-    supabase.from('laws_history').select('law_text, score_ecology').order('score_ecology', { ascending: true }).limit(5),
-    supabase.from('laws_history').select('law_text, score_overall').order('score_overall', { ascending: true }).limit(5)
+
+  const [upRes, downRes] = await Promise.all([
+    supabase.from('votes').select('law_text').eq('vote', 1),
+    supabase.from('votes').select('law_text').eq('vote', -1),
   ])
 
-  return NextResponse.json({
-    leaderboard: {
-      economy: (topEconomy.data || []).map(h => ({ law: h.law_text, score: h.score_economy })),
-      social: (topSocial.data || []).map(h => ({ law: h.law_text, score: h.score_social })),
-      ecology: (topEcology.data || []).map(h => ({ law: h.law_text, score: h.score_ecology })),
-      overall: (topOverall.data || []).map(h => ({ law: h.law_text, score: h.score_overall }))
-    },
-    flop: {
-      economy: (flopEconomy.data || []).map(h => ({ law: h.law_text, score: h.score_economy })),
-      social: (flopSocial.data || []).map(h => ({ law: h.law_text, score: h.score_social })),
-      ecology: (flopEcology.data || []).map(h => ({ law: h.law_text, score: h.score_ecology })),
-      overall: (flopOverall.data || []).map(h => ({ law: h.law_text, score: h.score_overall }))
+  const countBy = (rows) => {
+    const counts = {}
+    for (const row of rows || []) {
+      counts[row.law_text] = (counts[row.law_text] || 0) + 1
     }
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([law, count]) => ({ law, count }))
+  }
+
+  return NextResponse.json({
+    top: countBy(upRes.data),
+    flop: countBy(downRes.data),
   }, { headers: corsHeaders })
+}
+
+async function handleVote(request) {
+  const body = await request.json()
+  const { law, vote } = body
+  if (!law || ![1, -1].includes(vote)) {
+    return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400, headers: corsHeaders })
+  }
+
+  const supabase = createServiceClient()
+  if (!supabase) {
+    return NextResponse.json({ error: 'Service non disponible' }, { status: 500, headers: corsHeaders })
+  }
+
+  const user = await getUser(request)
+  const ip = getClientIP(request)
+  const lawText = law.trim()
+
+  if (user) {
+    const { data: existing } = await supabase.from('votes').select('id, vote').eq('law_text', lawText).eq('user_id', user.id).maybeSingle()
+    if (existing) {
+      if (existing.vote === vote) {
+        await supabase.from('votes').delete().eq('id', existing.id)
+      } else {
+        await supabase.from('votes').update({ vote }).eq('id', existing.id)
+      }
+    } else {
+      await supabase.from('votes').insert({ law_text: lawText, vote, user_id: user.id, ip_address: ip })
+    }
+  } else {
+    const { data: existing } = await supabase.from('votes').select('id, vote').eq('law_text', lawText).eq('ip_address', ip).is('user_id', null).maybeSingle()
+    if (existing) {
+      if (existing.vote === vote) {
+        await supabase.from('votes').delete().eq('id', existing.id)
+      } else {
+        await supabase.from('votes').update({ vote }).eq('id', existing.id)
+      }
+    } else {
+      await supabase.from('votes').insert({ law_text: lawText, vote, ip_address: ip })
+    }
+  }
+
+  const [upRes, downRes] = await Promise.all([
+    supabase.from('votes').select('*', { count: 'exact', head: true }).eq('law_text', lawText).eq('vote', 1),
+    supabase.from('votes').select('*', { count: 'exact', head: true }).eq('law_text', lawText).eq('vote', -1),
+  ])
+
+  let userVote = null
+  if (user) {
+    const { data: mv } = await supabase.from('votes').select('vote').eq('law_text', lawText).eq('user_id', user.id).maybeSingle()
+    userVote = mv?.vote ?? null
+  } else {
+    const { data: mv } = await supabase.from('votes').select('vote').eq('law_text', lawText).eq('ip_address', ip).is('user_id', null).maybeSingle()
+    userVote = mv?.vote ?? null
+  }
+
+  return NextResponse.json({ upvotes: upRes.count ?? 0, downvotes: downRes.count ?? 0, userVote }, { headers: corsHeaders })
+}
+
+async function handleGetVotes(request) {
+  const { searchParams } = new URL(request.url)
+  const law = searchParams.get('law')?.trim()
+  if (!law) {
+    return NextResponse.json({ upvotes: 0, downvotes: 0, userVote: null }, { headers: corsHeaders })
+  }
+
+  const supabase = createServiceClient()
+  if (!supabase) {
+    return NextResponse.json({ upvotes: 0, downvotes: 0, userVote: null }, { headers: corsHeaders })
+  }
+
+  const user = await getUser(request)
+  const ip = getClientIP(request)
+
+  const [upRes, downRes] = await Promise.all([
+    supabase.from('votes').select('*', { count: 'exact', head: true }).eq('law_text', law).eq('vote', 1),
+    supabase.from('votes').select('*', { count: 'exact', head: true }).eq('law_text', law).eq('vote', -1),
+  ])
+
+  let userVote = null
+  if (user) {
+    const { data: mv } = await supabase.from('votes').select('vote').eq('law_text', law).eq('user_id', user.id).maybeSingle()
+    userVote = mv?.vote ?? null
+  } else {
+    const { data: mv } = await supabase.from('votes').select('vote').eq('law_text', law).eq('ip_address', ip).is('user_id', null).maybeSingle()
+    userVote = mv?.vote ?? null
+  }
+
+  return NextResponse.json({ upvotes: upRes.count ?? 0, downvotes: downRes.count ?? 0, userVote }, { headers: corsHeaders })
 }
 
 // Get current user
