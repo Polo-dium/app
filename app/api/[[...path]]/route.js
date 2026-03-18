@@ -892,6 +892,15 @@ async function handleCreateCheckout(request) {
 
     let customerId = user.profile?.stripe_customer_id
 
+    // Vérifier que le customer existe en mode live (l'ID stocké peut être un ID test)
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId)
+      } catch {
+        customerId = null // ID invalide ou mode test → on en crée un nouveau
+      }
+    }
+
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
