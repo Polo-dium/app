@@ -990,6 +990,7 @@ function ButterflyApp() {
   const [showSidebar, setShowSidebar] = useState(false)
   const [sidebarTab, setSidebarTab] = useState('history')
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showBanner, setShowBanner] = useState(true)
   const [rateLimitExceeded, setRateLimitExceeded] = useState(null)
   const [showDebateChat, setShowDebateChat] = useState(false)
   const [explainText, setExplainText] = useState('')
@@ -1123,6 +1124,13 @@ function ButterflyApp() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl"></div>
       </div>
       
+      {!user && showBanner && (
+        <motion.div className="relative z-20 mx-4 mt-3 mb-0 rounded-xl bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-red-900/40 border border-white/10 px-5 py-4" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+          <button onClick={() => setShowBanner(false)} className="absolute top-2 right-2 p-1 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+          <p className="text-sm text-white/90 leading-relaxed pr-6"><strong className="text-white">Vous votez pour des lois. Vous devriez les comprendre.</strong> Analysez n'importe quelle proposition de loi en 30 secondes : qui y gagne, qui y perd, quels effets en chaîne. Testez vos convictions face aux faits, pas aux slogans.</p>
+        </motion.div>
+      )}
+
       <header className="relative z-20 flex justify-end items-center p-4">
         <div className="flex items-center gap-2">
           {user ? <UserMenu /> : <Button onClick={() => setShowAuthModal(true)} variant="outline" size="sm"><User className="w-4 h-4 mr-2" />Connexion</Button>}
