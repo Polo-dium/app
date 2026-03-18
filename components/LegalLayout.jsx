@@ -25,6 +25,7 @@ export default function LegalLayout({ title, children }) {
           <Link href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</Link>
           <Link href="/confidentialite" className="hover:text-white transition-colors">Politique de confidentialité</Link>
           <Link href="/cgu" className="hover:text-white transition-colors">CGU / CGV</Link>
+          <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
         </div>
       </footer>
     </div>

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { SYSTEM_PROMPT_EXPLICATION, buildExplicationPrompt } from '@/lib/prompts/explication'
-import { getUser, getUserTierInfo, checkFeatureRateLimit, EXPLAIN_LIMITS, RATE_MESSAGES } from '@/lib/rateLimit'
+import { getUser, getUserTierInfo, getClientIP, checkFeatureRateLimit, EXPLAIN_LIMITS, RATE_MESSAGES } from '@/lib/rateLimit'
+import { trackAnalysis } from '@/lib/analytics'
 
 // Modèle configurable via variable d'environnement
 const MODEL_FREE = process.env.CLAUDE_MODEL_FREE || 'claude-haiku-4-5-20251001'
@@ -33,10 +34,12 @@ export async function POST(request) {
   // Rate limiting
   const user = await getUser(request)
   const { identifier, identifierType, userTier } = getUserTierInfo(user)
+  const ip = getClientIP()
   const limits = EXPLAIN_LIMITS[userTier]
   const rateLimit = await checkFeatureRateLimit(identifier, identifierType, limits, 'explain')
 
   if (!rateLimit.allowed) {
+    trackAnalysis({ mode: 'explication', userId: user?.id, ip, tier: userTier, proposition: query, status: 'rate_limited' }).catch(() => {})
     return NextResponse.json({
       error: 'rate_limit_exceeded',
       message: RATE_MESSAGES.explain[userTier] || 'Limite atteinte.',
@@ -48,6 +51,7 @@ export async function POST(request) {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const userPrompt = buildExplicationPrompt(query.trim(), assemblyData || null)
+  const startTime = Date.now()
 
   // Build streaming response
   const encoder = new TextEncoder()
@@ -55,6 +59,7 @@ export async function POST(request) {
   const stream = new ReadableStream({
     async start(controller) {
       let sourceCount = 0
+      let tokensUsed = null
 
       try {
         const anthropicStream = anthropic.messages.stream({
@@ -82,14 +87,21 @@ export async function POST(request) {
         // Count web searches from the final message
         const finalMsg = await anthropicStream.finalMessage()
         sourceCount = finalMsg.content?.filter(b => b.type === 'tool_use' && b.name === 'web_search').length || 0
+        tokensUsed = finalMsg.usage?.output_tokens || null
 
         // Send done event with metadata
         const done = JSON.stringify({ type: 'done', sourceCount, tier: userTier })
         controller.enqueue(encoder.encode(`data: ${done}\n\n`))
+
+        // Track success (fire-and-forget)
+        trackAnalysis({ mode: 'explication', userId: user?.id, ip, tier: userTier, proposition: query, modelUsed: MODEL_FREE, tokensUsed, responseTimeMs: Date.now() - startTime, status: 'success' }).catch(() => {})
       } catch (err) {
         console.error('[Explain] Stream error:', err)
         const error = JSON.stringify({ type: 'error', message: err.message })
         controller.enqueue(encoder.encode(`data: ${error}\n\n`))
+
+        // Track error (fire-and-forget)
+        trackAnalysis({ mode: 'explication', userId: user?.id, ip, tier: userTier, proposition: query, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'error', errorMessage: err.message }).catch(() => {})
       } finally {
         controller.close()
       }

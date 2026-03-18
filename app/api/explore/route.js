@@ -6,7 +6,8 @@
 
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { getUser, getUserTierInfo, checkFeatureRateLimit, EXPLORE_LIMITS, RATE_MESSAGES } from '@/lib/rateLimit'
+import { getUser, getUserTierInfo, getClientIP, checkFeatureRateLimit, EXPLORE_LIMITS, RATE_MESSAGES } from '@/lib/rateLimit'
+import { trackAnalysis } from '@/lib/analytics'
 
 const MODEL_FREE = process.env.CLAUDE_MODEL_FREE || 'claude-haiku-4-5-20251001'
 
@@ -83,10 +84,12 @@ export async function POST(request) {
   // Rate limiting
   const user = await getUser(request)
   const { identifier, identifierType, userTier } = getUserTierInfo(user)
+  const ip = getClientIP()
   const limits = EXPLORE_LIMITS[userTier]
   const rateLimit = await checkFeatureRateLimit(identifier, identifierType, limits, 'explore')
 
   if (!rateLimit.allowed) {
+    trackAnalysis({ mode: 'explore', userId: user?.id, ip, tier: userTier, proposition: trimmed, status: 'rate_limited' }).catch(() => {})
     return NextResponse.json({
       error: 'rate_limit_exceeded',
       message: RATE_MESSAGES.explore[userTier] || 'Limite atteinte.',
@@ -96,6 +99,7 @@ export async function POST(request) {
     }, { status: 429, headers: corsHeaders })
   }
 
+  const startTime = Date.now()
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -107,6 +111,7 @@ export async function POST(request) {
     })
 
     const text = message.content[0]?.text || ''
+    const tokensUsed = message.usage?.output_tokens || null
 
     // Extract JSON robustly
     const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -133,9 +138,11 @@ export async function POST(request) {
       nodes: Array.isArray(ring.nodes) ? ring.nodes : [],
     }))
 
+    trackAnalysis({ mode: 'explore', userId: user?.id, ip, tier: userTier, proposition: trimmed, modelUsed: MODEL_FREE, tokensUsed, responseTimeMs: Date.now() - startTime, status: 'success' }).catch(() => {})
     return NextResponse.json(data, { headers: corsHeaders })
   } catch (error) {
     console.error('[explore] Error:', error.message)
+    trackAnalysis({ mode: 'explore', userId: user?.id, ip, tier: userTier, proposition: trimmed, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'error', errorMessage: error.message }).catch(() => {})
     return NextResponse.json(
       { error: error.message || 'Erreur lors de la génération de la carte' },
       { status: 500, headers: corsHeaders }

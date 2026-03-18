@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
 import { createShare } from '@/lib/share'
+import { trackAnalysis } from '@/lib/analytics'
 
 // ── Modèles Claude configurables via variables d'environnement ──────────────
 // CLAUDE_MODEL_FREE    → modèle pour les utilisateurs anonymes/gratuits
@@ -484,7 +485,8 @@ async function handleAnalyze(request) {
   const rateLimit = await checkRateLimit(identifier, identifierType, userTier)
   
   if (!rateLimit.allowed) {
-    return NextResponse.json({ 
+    trackAnalysis({ mode: 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, status: 'rate_limited' }).catch(() => {})
+    return NextResponse.json({
       error: 'rate_limit_exceeded',
       message: rateLimit.message,
       remaining: rateLimit.remaining,
@@ -492,18 +494,22 @@ async function handleAnalyze(request) {
       userTier
     }, { status: 429, headers: corsHeaders })
   }
-  
+
+  const startTime = Date.now()
   try {
     const analysis = await analyzeLaw(law)
     await saveLawToHistory(law, analysis, user?.id, ipAddress)
-    
+
+    trackAnalysis({ mode: 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, modelUsed: userTier === 'premium' ? MODEL_PREMIUM : MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'success' }).catch(() => {})
+
     return NextResponse.json({
       ...analysis,
       rateLimit: { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt }
     }, { headers: corsHeaders })
-    
+
   } catch (error) {
     console.error('Analysis Error:', error)
+    trackAnalysis({ mode: 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'error', errorMessage: error.message }).catch(() => {})
     return NextResponse.json({ error: 'Erreur lors de l\'analyse: ' + error.message }, { status: 500, headers: corsHeaders })
   }
 }
@@ -523,17 +529,21 @@ async function handleDebateChat(request) {
   const body = await request.json()
   const { law, law1, law2, selectedLaws, messages, currentScores, law1Scores, law2Scores, summarize, firstMessage } = body
 
+  const chatTier = user.profile?.is_premium ? 'premium' : 'free'
+  const chatIp = getClientIP(request)
+  const chatLaw = law || law1 || ''
+
   // Rate limit only actual chat messages (not firstMessage greeting or summarize)
   if (!firstMessage && !summarize) {
-    const userTier = user.profile?.is_premium ? 'premium' : 'free'
-    const rateLimit = await checkDebateChatRateLimit(user.id, userTier)
+    const rateLimit = await checkDebateChatRateLimit(user.id, chatTier)
     if (!rateLimit.allowed) {
+      trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, status: 'rate_limited' }).catch(() => {})
       return NextResponse.json({
         error: 'rate_limit_exceeded',
         message: rateLimit.message,
         remaining: 0,
         resetAt: rateLimit.resetAt,
-        userTier
+        userTier: chatTier
       }, { status: 429, headers: corsHeaders })
     }
   }
@@ -547,6 +557,7 @@ async function handleDebateChat(request) {
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const chatStartTime = Date.now()
 
   try {
     // --- FIRST MESSAGE MODE ---
@@ -568,6 +579,7 @@ Génère un message d'ouverture percutant (2 paragraphes max) pour attaquer cett
         system: firstMsgSystem,
         messages: [{ role: 'user', content: 'Commence le débat.' }],
       })
+      trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - chatStartTime, status: 'success' }).catch(() => {})
       return NextResponse.json({ firstMessage: firstText }, { headers: corsHeaders })
     }
 
@@ -626,6 +638,7 @@ Format JSON STRICT à respecter :
         summaryData = match ? JSON.parse(match[0]) : null
       } catch { summaryData = null }
 
+      trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - chatStartTime, status: 'success' }).catch(() => {})
       return NextResponse.json({
         summary: summaryData ? JSON.stringify(summaryData) : rawText,
         parsed: !!summaryData
@@ -673,10 +686,12 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
       }
     }
 
+    trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - chatStartTime, status: 'success' }).catch(() => {})
     return NextResponse.json({ response: responseText, scoreAdjustment }, { headers: corsHeaders })
 
   } catch (error) {
     console.error('Debate Chat Error:', error)
+    trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - chatStartTime, status: 'error', errorMessage: error.message }).catch(() => {})
     return NextResponse.json({ error: 'Erreur lors du débat: ' + error.message }, { status: 500, headers: corsHeaders })
   }
 }
@@ -895,13 +910,16 @@ async function handleCreateCheckout(request) {
     const supabase = createServiceClient()
 
     let customerId = user.profile?.stripe_customer_id
+    console.log(`[Checkout] User ${user.id}, existing stripe_customer_id: ${customerId || 'none'}`)
 
     // Vérifier que le customer existe en mode live (l'ID stocké peut être un ID test)
     if (customerId) {
       try {
         await stripe.customers.retrieve(customerId)
-      } catch {
-        customerId = null // ID invalide ou mode test → on en crée un nouveau
+        console.log(`[Checkout] Customer ${customerId} verified OK`)
+      } catch (err) {
+        console.warn(`[Checkout] Customer ${customerId} invalid (${err.message}), creating new one`)
+        customerId = null
       }
     }
 
@@ -911,6 +929,7 @@ async function handleCreateCheckout(request) {
         metadata: { user_id: user.id }
       })
       customerId = customer.id
+      console.log(`[Checkout] Created new customer ${customerId} for user ${user.id}`)
       if (supabase) {
         await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
       }
@@ -971,22 +990,31 @@ async function handleCancelSubscription(request) {
 // Stripe: Customer portal
 async function handleStripePortal(request) {
   const user = await getUser(request)
-  
-  if (!user || !user.profile?.stripe_customer_id) {
-    return NextResponse.json({ error: 'Aucun abonnement trouvé' }, { status: 400, headers: corsHeaders })
+
+  if (!user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401, headers: corsHeaders })
   }
-  
+
+  if (!user.profile?.stripe_customer_id) {
+    console.error(`[Portal] User ${user.id} has no stripe_customer_id`)
+    return NextResponse.json({ error: 'Aucun abonnement trouvé — contactez le support si vous avez déjà payé' }, { status: 400, headers: corsHeaders })
+  }
+
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json({ error: 'Stripe non configuré' }, { status: 500, headers: corsHeaders })
   }
-  
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-  const session = await stripe.billingPortal.sessions.create({
-    customer: user.profile.stripe_customer_id,
-    return_url: process.env.NEXT_PUBLIC_BASE_URL
-  })
-  
-  return NextResponse.json({ url: session.url }, { headers: corsHeaders })
+
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.profile.stripe_customer_id,
+      return_url: process.env.NEXT_PUBLIC_BASE_URL || 'https://butterflygov.com'
+    })
+    return NextResponse.json({ url: session.url }, { headers: corsHeaders })
+  } catch (err) {
+    console.error('[Portal] Error:', err.message)
+    return NextResponse.json({ error: err.message || 'Erreur Stripe' }, { status: 500, headers: corsHeaders })
+  }
 }
 
 // Stripe: Verify checkout session (fallback si webhook manqué)
@@ -1011,17 +1039,20 @@ async function handleVerifySession(request) {
       const supabase = createServiceClient()
       if (supabase) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+        const customerId = session.customer
         await supabase.from('profiles').update({
           is_premium: true,
+          stripe_customer_id: customerId || undefined,
           stripe_subscription_id: subscriptionId,
           premium_until: new Date(subscription.current_period_end * 1000)
         }).eq('id', userId)
+        console.log(`[verify-session] User ${userId} → premium, customer=${customerId}, sub=${subscriptionId}`)
       }
     }
 
     return NextResponse.json({ ok: true }, { headers: corsHeaders })
   } catch (err) {
-    console.error('verify-session error:', err)
+    console.error('[verify-session] Error:', err.message)
     return NextResponse.json({ ok: false }, { headers: corsHeaders })
   }
 }
@@ -1053,36 +1084,50 @@ async function handleStripeWebhook(request) {
     case 'checkout.session.completed': {
       const session = event.data.object
       const userId = session.metadata?.user_id
+      const customerId = session.customer
       const subscriptionId = session.subscription
-      
+
       if (userId && subscriptionId) {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-        await supabase.from('profiles').update({
-          is_premium: true,
-          stripe_subscription_id: subscriptionId,
-          premium_until: new Date(subscription.current_period_end * 1000)
-        }).eq('id', userId)
+        try {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+          await supabase.from('profiles').update({
+            is_premium: true,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+            premium_until: new Date(subscription.current_period_end * 1000)
+          }).eq('id', userId)
+          console.log(`[Webhook catch-all] checkout.session.completed → user ${userId} premium, customer=${customerId}`)
+        } catch (err) {
+          console.error(`[Webhook catch-all] Error processing checkout for user ${userId}:`, err.message)
+        }
+      } else {
+        console.error('[Webhook catch-all] checkout.session.completed missing userId or subscriptionId', { userId, subscriptionId })
       }
       break
-    } 
-    
+    }
+
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
       const subscription = event.data.object
       const customerId = subscription.customer
-      
+
       const { data: profile } = await supabase.from('profiles').select('id').eq('stripe_customer_id', customerId).single()
-      
+
       if (profile) {
         const isActive = subscription.status === 'active'
+        const cancelAtPeriodEnd = subscription.cancel_at_period_end === true
         await supabase.from('profiles').update({
           is_premium: isActive,
-          premium_until: isActive ? new Date(subscription.current_period_end * 1000) : null
+          premium_until: isActive ? new Date(subscription.current_period_end * 1000) : null,
+          stripe_cancel_at_period_end: cancelAtPeriodEnd
         }).eq('id', profile.id)
+        console.log(`[Webhook catch-all] ${event.type} → customer ${customerId} is_premium=${isActive} cancel_at_period_end=${cancelAtPeriodEnd}`)
+      } else {
+        console.error(`[Webhook catch-all] ${event.type} → customer ${customerId} not found in profiles`)
       }
       break
     }
   }
-  
+
   return NextResponse.json({ received: true })
 }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -338,6 +338,9 @@ function UserMenu() {
                 <RefreshCw className="w-4 h-4" />{resuming ? 'Chargement...' : 'Reprendre l\'abonnement'}
               </button>
             )}
+            <a href="/faq" className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm text-muted-foreground hover:text-white transition-colors">
+              <HelpCircle className="w-4 h-4" />FAQ
+            </a>
             <a href={`mailto:boutarin.paul@gmail.com?subject=Support Butterfly.gov&body=Bonjour,%0A%0AMon compte : ${user.email}%0A%0A`} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-sm text-muted-foreground hover:text-white transition-colors">
               <Mail className="w-4 h-4" />Support
             </a>
@@ -1125,13 +1128,21 @@ function ButterflyApp() {
       </div>
       
       {!user && showBanner && (
-        <motion.div className="relative z-20 mx-4 mt-3 mb-0 rounded-xl bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-red-900/40 border border-white/10 px-5 py-4" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div className="relative z-20 mx-4 mt-3 mb-0 rounded-xl bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-red-900/40 border border-white/10 px-5 py-5 md:px-8 md:py-6 text-center" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
           <button onClick={() => setShowBanner(false)} className="absolute top-2 right-2 p-1 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><X className="w-4 h-4" /></button>
-          <p className="text-sm text-white/90 leading-relaxed pr-6"><strong className="text-white">Vous votez pour des lois. Vous devriez les comprendre.</strong> Analysez n'importe quelle proposition de loi en 30 secondes : qui y gagne, qui y perd, quels effets en chaîne. Testez vos convictions face aux faits, pas aux slogans.</p>
+          <h2 className="text-lg md:text-xl font-bold text-white mb-2">Vous votez pour des lois. Vous devriez les comprendre.</h2>
+          <p className="text-sm text-white/70 leading-relaxed mb-4 max-w-xl mx-auto">Analysez n'importe quelle proposition de loi en 30 secondes : qui y gagne, qui y perd, quels effets en chaîne. Testez vos convictions face aux faits, pas aux slogans.</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button onClick={() => setShowAuthModal(true)} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold px-5">Créer un compte</Button>
+            <button onClick={() => setShowBanner(false)} className="text-sm text-white/50 hover:text-white/80 transition-colors underline underline-offset-2">Essayer sans compte</button>
+          </div>
         </motion.div>
       )}
 
-      <header className="relative z-20 flex justify-end items-center p-4">
+      <header className="relative z-20 flex justify-between items-center p-4">
+        <a href="/faq" className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors text-sm text-muted-foreground hover:text-white">
+          <HelpCircle className="w-4 h-4" /><span className="hidden sm:inline">FAQ</span>
+        </a>
         <div className="flex items-center gap-2">
           {user ? <UserMenu /> : <Button onClick={() => setShowAuthModal(true)} variant="outline" size="sm"><User className="w-4 h-4 mr-2" />Connexion</Button>}
           <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors">{showSidebar ? <X className="w-5 h-5" /> : <History className="w-5 h-5" />}</button>
@@ -1317,6 +1328,7 @@ function ButterflyApp() {
           <a href="/mentions-legales" className="hover:text-white transition-colors">Mentions légales</a>
           <a href="/confidentialite" className="hover:text-white transition-colors">Confidentialité</a>
           <a href="/cgu" className="hover:text-white transition-colors">CGU / CGV</a>
+          <a href="/faq" className="hover:text-white transition-colors">FAQ</a>
           <button onClick={() => window.dispatchEvent(new Event('showCookieConsent'))} className="hover:text-white transition-colors">Gérer les cookies</button>
         </div>
       </footer>
