@@ -58,7 +58,9 @@ function AuthProvider({ children }) {
   }, [])
   
   const fetchProfile = async (userId, supabase) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    if (error) console.error('fetchProfile error:', error)
+    console.log('fetchProfile data:', data)
     setProfile(data)
     setLoading(false)
   }
