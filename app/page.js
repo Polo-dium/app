@@ -857,6 +857,97 @@ function ExplorerLawCard({ law, onClick }) {
   )
 }
 
+// Voted Law Card (for Top/Flop preview on homepage)
+function VotedLawCard({ law, type, onClick }) {
+  const isTop = type === 'top'
+  const borderColor = isTop ? 'border-green-500/20 hover:border-green-500/40' : 'border-red-500/20 hover:border-red-500/40'
+  const bgHover = isTop ? 'hover:bg-green-500/5' : 'hover:bg-red-500/5'
+  const dotColor = isTop ? 'bg-green-500' : 'bg-red-500'
+  const label = isTop ? 'Top' : 'Flop'
+  const total = law.votes_pour + law.votes_contre
+  const pourPct = total > 0 ? Math.round((law.votes_pour / total) * 100) : 50
+
+  return (
+    <motion.button
+      onClick={onClick}
+      className={`text-left p-3 rounded-xl bg-white/5 border ${borderColor} ${bgHover} transition-colors w-full`}
+      whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className={`shrink-0 w-2 h-2 rounded-full ${dotColor}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${isTop ? 'text-green-400' : 'text-red-400'}`}>{label}</span>
+      </div>
+      <p className="font-semibold text-sm text-white leading-tight line-clamp-2 mb-2">{law.law_text}</p>
+      <div className="space-y-1.5">
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden flex">
+          <div className="h-full bg-green-500 transition-all" style={{ width: `${pourPct}%` }} />
+          <div className="h-full bg-red-500 transition-all" style={{ width: `${100 - pourPct}%` }} />
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-green-400 flex items-center gap-0.5"><ThumbsUp className="w-3 h-3" />{law.votes_pour}</span>
+          <span className="text-muted-foreground">{law.votes_total} votes</span>
+          <span className="text-red-400 flex items-center gap-0.5"><ThumbsDown className="w-3 h-3" />{law.votes_contre}</span>
+        </div>
+        {law.score_overall != null && (
+          <div className="flex gap-1.5 mt-0.5">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${law.score_overall >= 60 ? 'border-green-500/30 text-green-400' : law.score_overall >= 40 ? 'border-yellow-500/30 text-yellow-400' : 'border-red-500/30 text-red-400'}`}>
+              Score {law.score_overall}/100
+            </span>
+          </div>
+        )}
+      </div>
+    </motion.button>
+  )
+}
+
+// Top/Flop Preview (homepage section below daily laws)
+function TopFlopPreview({ onOpenTops, onSelectLaw }) {
+  const [topLaw, setTopLaw] = useState(null)
+  const [flopLaw, setFlopLaw] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/leaderboard-v2')
+      .then(r => r.json())
+      .then(data => {
+        if (data.top?.length > 0) setTopLaw(data.top[0])
+        if (data.flop?.length > 0) setFlopLaw(data.flop[0])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return (
+    <div className="flex justify-center py-4">
+      <Loader2 className="w-5 h-5 animate-spin text-yellow-400" />
+    </div>
+  )
+  if (!topLaw && !flopLaw) return null
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Trophy className="w-4 h-4 text-yellow-400" />
+        <p className="text-sm text-muted-foreground">Les lois les plus votées par les utilisateurs</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {topLaw && <VotedLawCard law={topLaw} type="top" onClick={() => onSelectLaw(topLaw.law_text)} />}
+        {flopLaw && <VotedLawCard law={flopLaw} type="flop" onClick={() => onSelectLaw(flopLaw.law_text)} />}
+      </div>
+      <div className="flex justify-center">
+        <button
+          onClick={onOpenTops}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-white transition-colors px-3 py-1.5 rounded-full hover:bg-white/10 border border-white/10"
+        >
+          <Award className="w-3.5 h-3.5" />Voir les autres lois votées
+          <ChevronRight className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // History Panel
 function HistoryPanel({ onSelectLaw }) {
   const { getAccessToken } = useAuth()
@@ -1202,46 +1293,110 @@ function AdaptLawModal({ open, onClose, originalLaw, chatMessages, getAccessToke
   )
 }
 
-function LeaderboardPanel({ onSelectLaw }) {
+function LeaderboardV2Panel({ onSelectLaw }) {
   const [top, setTop] = useState([])
   const [flop, setFlop] = useState([])
   const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    fetch('/api/leaderboard').then(r => r.json()).then(data => { setTop(data.top || []); setFlop(data.flop || []); setLoading(false) }).catch(() => setLoading(false))
+    fetch('/api/leaderboard-v2')
+      .then(r => r.json())
+      .then(data => { setTop(data.top || []); setFlop(data.flop || []); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
+
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-yellow-400" /></div>
   if (top.length === 0 && flop.length === 0) return (
     <div className="text-center py-8 text-muted-foreground">
-      <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
+      <Trophy className="w-12 h-12 mx-auto mb-2 opacity-50" />
       <p>Pas encore de votes</p>
       <p className="text-xs mt-1">Analysez une loi et votez pour qu'elle apparaisse ici !</p>
     </div>
   )
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {onSelectLaw && <p className="text-xs text-muted-foreground text-center">Cliquez sur une loi pour la tester</p>}
+
       {top.length > 0 && (
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 mb-2"><ThumbsUp className="w-4 h-4 text-green-400" /><span className="text-xs font-semibold text-green-400 uppercase">Les plus soutenues</span></div>
-          {top.map((item, i) => (
-            <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-white/10 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-green-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'}`}>{i + 1}</div>
-              <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
-              <span className="font-bold text-green-400 flex items-center gap-1"><ThumbsUp className="w-3 h-3" />{item.count}</span>
-            </motion.div>
-          ))}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 mb-2">
+            <ThumbsUp className="w-4 h-4 text-green-400" />
+            <span className="text-xs font-semibold text-green-400 uppercase tracking-widest">Top {top.length}</span>
+          </div>
+          <div className="space-y-1 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin">
+            {top.map((item, i) => {
+              const total = item.votes_pour + item.votes_contre
+              const pourPct = total > 0 ? Math.round((item.votes_pour / total) * 100) : 50
+              return (
+                <motion.div
+                  key={item.law_id}
+                  className="flex items-center gap-2.5 p-2.5 rounded-lg bg-black/30 border border-white/10 hover:border-green-500/50 cursor-pointer transition-colors"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  onClick={() => onSelectLaw && onSelectLaw(item.law_text)}
+                >
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                    i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'
+                  }`}>{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white line-clamp-1">{item.law_text}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden flex">
+                        <div className="h-full bg-green-500" style={{ width: `${pourPct}%` }} />
+                        <div className="h-full bg-red-500" style={{ width: `${100 - pourPct}%` }} />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{item.votes_total}v</span>
+                    </div>
+                  </div>
+                  <span className="font-bold text-sm text-green-400 flex items-center gap-0.5 shrink-0">
+                    <ThumbsUp className="w-3 h-3" />{item.votes_pour}
+                  </span>
+                </motion.div>
+              )
+            })}
+          </div>
         </div>
       )}
+
       {flop.length > 0 && (
-        <div className="space-y-1 pt-2 border-t border-white/10">
-          <div className="flex items-center gap-2 mb-2"><ThumbsDown className="w-4 h-4 text-red-400" /><span className="text-xs font-semibold text-red-400 uppercase">Les plus rejetées</span></div>
-          {flop.map((item, i) => (
-            <motion.div key={i} className={`flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-red-900/30 transition-colors ${onSelectLaw ? 'cursor-pointer hover:border-red-500/50' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw && onSelectLaw(item.law)}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-red-900/50 text-red-300">{i + 1}</div>
-              <p className="text-sm text-white flex-1 line-clamp-1">"{item.law}"</p>
-              <span className="font-bold text-red-400 flex items-center gap-1"><ThumbsDown className="w-3 h-3" />{item.count}</span>
-            </motion.div>
-          ))}
+        <div className="space-y-1.5 pt-3 border-t border-white/10">
+          <div className="flex items-center gap-2 mb-2">
+            <ThumbsDown className="w-4 h-4 text-red-400" />
+            <span className="text-xs font-semibold text-red-400 uppercase tracking-widest">Flop {flop.length}</span>
+          </div>
+          <div className="space-y-1 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin">
+            {flop.map((item, i) => {
+              const total = item.votes_pour + item.votes_contre
+              const pourPct = total > 0 ? Math.round((item.votes_pour / total) * 100) : 50
+              return (
+                <motion.div
+                  key={item.law_id}
+                  className="flex items-center gap-2.5 p-2.5 rounded-lg bg-black/30 border border-red-900/30 hover:border-red-500/50 cursor-pointer transition-colors"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  onClick={() => onSelectLaw && onSelectLaw(item.law_text)}
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-red-900/50 text-red-300">{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white line-clamp-1">{item.law_text}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden flex">
+                        <div className="h-full bg-green-500" style={{ width: `${pourPct}%` }} />
+                        <div className="h-full bg-red-500" style={{ width: `${100 - pourPct}%` }} />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{item.votes_total}v</span>
+                    </div>
+                  </div>
+                  <span className="font-bold text-sm text-red-400 flex items-center gap-0.5 shrink-0">
+                    <ThumbsDown className="w-3 h-3" />{item.votes_contre}
+                  </span>
+                </motion.div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1446,9 +1601,9 @@ function ButterflyApp() {
             <div className="pt-16">
               <button onClick={() => setShowSidebar(false)} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><X className="w-4 h-4" /></button>
               <Tabs value={sidebarTab} onValueChange={setSidebarTab}>
-                <TabsList className="w-full mb-4"><TabsTrigger value="history" className="flex-1"><History className="w-4 h-4 mr-1" />Historique</TabsTrigger><TabsTrigger value="leaderboard" className="flex-1"><Award className="w-4 h-4 mr-1" />Top</TabsTrigger></TabsList>
+                <TabsList className="w-full mb-4"><TabsTrigger value="history" className="flex-1"><History className="w-4 h-4 mr-1" />Historique</TabsTrigger><TabsTrigger value="tops" className="flex-1"><Trophy className="w-4 h-4 mr-1" />Top/Flop</TabsTrigger></TabsList>
                 <TabsContent value="history"><HistoryPanel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
-                <TabsContent value="leaderboard"><LeaderboardPanel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
+                <TabsContent value="tops"><LeaderboardV2Panel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
               </Tabs>
             </div>
           </motion.div>
@@ -1534,6 +1689,10 @@ function ButterflyApp() {
                       <DailyLawCard key={law.id} law={law} onClick={(text) => setLawText(text)} />
                     ))}
                   </div>
+                  <TopFlopPreview
+                    onOpenTops={() => { setSidebarTab('tops'); setShowSidebar(true) }}
+                    onSelectLaw={(text) => setLawText(text)}
+                  />
                 </div>
               )}
 

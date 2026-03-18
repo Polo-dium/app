@@ -458,7 +458,11 @@ export async function GET(request, { params }) {
   if (endpoint === 'leaderboard') {
     return handleGetLeaderboard(request)
   }
-  
+
+  if (endpoint === 'leaderboard-v2') {
+    return handleGetLeaderboardV2(request)
+  }
+
   if (endpoint === 'me') {
     return handleGetMe(request)
   }
@@ -802,6 +806,92 @@ async function handleGetLeaderboard(request) {
     top: countBy(upRes.data),
     flop: countBy(downRes.data),
   }, { headers: corsHeaders })
+}
+
+async function handleGetLeaderboardV2(request) {
+  const supabase = createServiceClient()
+  if (!supabase) {
+    return NextResponse.json({ top: [], flop: [] }, { headers: corsHeaders })
+  }
+
+  try {
+    // Fetch all votes (lightweight: just law_id + vote)
+    const { data: allVotes, error: votesError } = await supabase
+      .from('votes_v2')
+      .select('law_id, vote')
+
+    if (votesError || !allVotes || allVotes.length === 0) {
+      return NextResponse.json({ top: [], flop: [] }, { headers: corsHeaders })
+    }
+
+    // Aggregate votes per law_id
+    const lawVotes = {}
+    for (const v of allVotes) {
+      if (!lawVotes[v.law_id]) lawVotes[v.law_id] = { pour: 0, contre: 0 }
+      if (v.vote === 'pour') lawVotes[v.law_id].pour++
+      else if (v.vote === 'contre') lawVotes[v.law_id].contre++
+    }
+
+    // Compute net score and sort
+    const entries = Object.entries(lawVotes).map(([law_id, counts]) => ({
+      law_id,
+      votes_pour: counts.pour,
+      votes_contre: counts.contre,
+      votes_total: counts.pour + counts.contre,
+      net_score: counts.pour - counts.contre,
+    })).filter(e => e.votes_total > 0)
+
+    // Top 25: highest net_score
+    const topEntries = [...entries]
+      .sort((a, b) => b.net_score - a.net_score || b.votes_total - a.votes_total)
+      .slice(0, 25)
+
+    // Flop 25: lowest net_score (most "contre")
+    const flopEntries = [...entries]
+      .sort((a, b) => a.net_score - b.net_score || b.votes_total - a.votes_total)
+      .slice(0, 25)
+
+    // Fetch laws_history for all unique IDs
+    const allLawIds = [...new Set([
+      ...topEntries.map(e => e.law_id),
+      ...flopEntries.map(e => e.law_id)
+    ])]
+
+    const { data: laws } = await supabase
+      .from('laws_history')
+      .select('id, law_text, score_economy, score_social, score_ecology, score_overall')
+      .in('id', allLawIds)
+
+    const lawMap = {}
+    for (const law of (laws || [])) {
+      lawMap[law.id] = law
+    }
+
+    const enrich = (entry) => {
+      const law = lawMap[entry.law_id]
+      if (!law) return null
+      return {
+        law_id: entry.law_id,
+        law_text: law.law_text,
+        score_economy: law.score_economy,
+        score_social: law.score_social,
+        score_ecology: law.score_ecology,
+        score_overall: law.score_overall,
+        votes_pour: entry.votes_pour,
+        votes_contre: entry.votes_contre,
+        votes_total: entry.votes_total,
+        net_score: entry.net_score,
+      }
+    }
+
+    return NextResponse.json({
+      top: topEntries.map(enrich).filter(Boolean),
+      flop: flopEntries.map(enrich).filter(Boolean),
+    }, { headers: corsHeaders })
+  } catch (err) {
+    console.error('[Leaderboard V2] Error:', err.message)
+    return NextResponse.json({ top: [], flop: [] }, { headers: corsHeaders })
+  }
 }
 
 async function handleVote(request) {
