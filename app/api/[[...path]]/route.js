@@ -859,7 +859,7 @@ async function handleGetLeaderboardV2(request) {
 
     const { data: laws } = await supabase
       .from('laws_history')
-      .select('id, law_text, score_economy, score_social, score_ecology, score_overall')
+      .select('id, law_text, score_economy, score_social, score_ecology, score_overall, winners, losers, butterfly_effect')
       .in('id', allLawIds)
 
     const lawMap = {}
@@ -877,6 +877,9 @@ async function handleGetLeaderboardV2(request) {
         score_social: law.score_social,
         score_ecology: law.score_ecology,
         score_overall: law.score_overall,
+        winners: law.winners,
+        losers: law.losers,
+        butterfly_effect: law.butterfly_effect,
         votes_pour: entry.votes_pour,
         votes_contre: entry.votes_contre,
         votes_total: entry.votes_total,

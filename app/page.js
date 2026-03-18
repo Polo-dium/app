@@ -310,9 +310,8 @@ function UserMenu() {
   if (!user) return null
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 px-3 py-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold text-sm">{user.email?.[0]?.toUpperCase() || 'U'}</div>
-        {isPremium && <PremiumBadge />}
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 p-1.5 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${isPremium ? 'ring-2 ring-yellow-500 bg-gradient-to-br from-yellow-600 via-blue-600 to-red-500' : 'bg-gradient-to-br from-blue-600 to-red-500'}`}>{user.email?.[0]?.toUpperCase() || 'U'}</div>
       </button>
       {open && (
         <motion.div className="absolute right-0 top-12 w-64 bg-card rounded-lg border border-white/10 shadow-xl overflow-hidden z-50" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
@@ -932,8 +931,8 @@ function TopFlopPreview({ onOpenTops, onSelectLaw }) {
         <p className="text-sm text-muted-foreground">Les lois les plus votées par les utilisateurs</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {topLaw && <VotedLawCard law={topLaw} type="top" onClick={() => onSelectLaw(topLaw.law_text)} />}
-        {flopLaw && <VotedLawCard law={flopLaw} type="flop" onClick={() => onSelectLaw(flopLaw.law_text)} />}
+        {topLaw && <VotedLawCard law={topLaw} type="top" onClick={() => onSelectLaw(topLaw)} />}
+        {flopLaw && <VotedLawCard law={flopLaw} type="flop" onClick={() => onSelectLaw(flopLaw)} />}
       </div>
       <div className="flex justify-center">
         <button
@@ -968,7 +967,7 @@ function HistoryPanel({ onSelectLaw }) {
   return (
     <div className="space-y-2 max-h-96 overflow-y-auto">
       {history.map((item, i) => (
-        <motion.div key={item.id || i} className="p-3 rounded-lg bg-black/30 border border-white/10 hover:border-blue-500/50 cursor-pointer transition-colors" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw(item.law_text)}>
+        <motion.div key={item.id || i} className="p-3 rounded-lg bg-black/30 border border-white/10 hover:border-blue-500/50 cursor-pointer transition-colors" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }} onClick={() => onSelectLaw(item)}>
           <div className="flex justify-between items-start gap-2"><p className="text-sm text-white line-clamp-1 flex-1">"{item.law_text}"</p><ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" /></div>
           <div className="mt-1 flex gap-2 text-xs"><span className="text-blue-400">💰{item.score_economy}</span><span className="text-white">❤️{item.score_social}</span><span className="text-green-400">🌿{item.score_ecology}</span></div>
         </motion.div>
@@ -1335,7 +1334,7 @@ function LeaderboardV2Panel({ onSelectLaw }) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  onClick={() => onSelectLaw && onSelectLaw(item.law_text)}
+                  onClick={() => onSelectLaw && onSelectLaw(item)}
                 >
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
                     i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-gray-400 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-white'
@@ -1377,7 +1376,7 @@ function LeaderboardV2Panel({ onSelectLaw }) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  onClick={() => onSelectLaw && onSelectLaw(item.law_text)}
+                  onClick={() => onSelectLaw && onSelectLaw(item)}
                 >
                   <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-red-900/50 text-red-300">{i + 1}</div>
                   <div className="flex-1 min-w-0">
@@ -1400,6 +1399,82 @@ function LeaderboardV2Panel({ onSelectLaw }) {
         </div>
       )}
     </div>
+  )
+}
+
+// Law Preview Modal (shown when clicking a law from sidebar/top-flop)
+function LawPreviewModal({ law, onClose, onAnalyze }) {
+  if (!law) return null
+  const scoreColor = (v) => v >= 60 ? 'text-green-400' : v >= 40 ? 'text-yellow-400' : 'text-red-400'
+  const overallColor = law.score_overall >= 60 ? 'border-green-500 bg-green-500/20 text-green-400' : law.score_overall >= 40 ? 'border-yellow-500 bg-yellow-500/20 text-yellow-400' : 'border-red-500 bg-red-500/20 text-red-400'
+
+  return (
+    <Dialog open={!!law} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-white/10 text-white max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold leading-tight pr-6">{law.law_text}</DialogTitle>
+          <DialogDescription className="text-muted-foreground text-xs">Résumé de l'analyse</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          {law.score_overall != null && (
+            <div className="flex justify-center">
+              <div className={`px-3 py-1.5 rounded-full border ${overallColor} text-sm font-bold flex items-center gap-1.5`}>
+                <Star className="w-3.5 h-3.5" />Score Global : {law.score_overall}/100
+              </div>
+            </div>
+          )}
+          {(law.score_economy != null || law.score_social != null || law.score_ecology != null) && (
+            <div className="grid grid-cols-3 gap-2">
+              {law.score_economy != null && (
+                <div className="text-center p-2 rounded-lg bg-white/5 border border-white/10">
+                  <TrendingUp className="w-4 h-4 mx-auto mb-1 text-blue-400" />
+                  <p className={`text-lg font-bold tabular-nums ${scoreColor(law.score_economy)}`}>{law.score_economy}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase">Économie</p>
+                </div>
+              )}
+              {law.score_social != null && (
+                <div className="text-center p-2 rounded-lg bg-white/5 border border-white/10">
+                  <Heart className="w-4 h-4 mx-auto mb-1 text-white" />
+                  <p className={`text-lg font-bold tabular-nums ${scoreColor(law.score_social)}`}>{law.score_social}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase">Social</p>
+                </div>
+              )}
+              {law.score_ecology != null && (
+                <div className="text-center p-2 rounded-lg bg-white/5 border border-white/10">
+                  <Leaf className="w-4 h-4 mx-auto mb-1 text-green-400" />
+                  <p className={`text-lg font-bold tabular-nums ${scoreColor(law.score_ecology)}`}>{law.score_ecology}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase">Écologie</p>
+                </div>
+              )}
+            </div>
+          )}
+          {law.winners && (
+            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex items-center gap-1.5 mb-1"><Trophy className="w-3.5 h-3.5 text-green-400" /><span className="text-[10px] font-semibold text-green-400 uppercase">Gagnants</span></div>
+              <p className="text-sm text-green-100/80">{law.winners}</p>
+            </div>
+          )}
+          {law.losers && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-1.5 mb-1"><Skull className="w-3.5 h-3.5 text-red-400" /><span className="text-[10px] font-semibold text-red-400 uppercase">Perdants</span></div>
+              <p className="text-sm text-red-100/80">{law.losers}</p>
+            </div>
+          )}
+          {law.butterfly_effect && (
+            <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+              <div className="flex items-center gap-1.5 mb-1"><AlertTriangle className="w-3.5 h-3.5 text-purple-400" /><span className="text-[10px] font-semibold text-purple-400 uppercase">Effet Papillon</span></div>
+              <p className="text-sm text-purple-100/80 italic">{law.butterfly_effect}</p>
+            </div>
+          )}
+          <div className="flex gap-2 pt-2">
+            <Button onClick={() => onAnalyze(law.law_text)} className="flex-1 bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400">
+              <Sparkles className="w-4 h-4 mr-2" />Analyser cette loi
+            </Button>
+            <Button onClick={onClose} variant="outline" className="border-white/20 hover:bg-white/10">Fermer</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1433,6 +1508,7 @@ function ButterflyApp() {
   const [previousScores, setPreviousScores] = useState(null)
   const [showAdaptModal, setShowAdaptModal] = useState(false)
   const [debateMessages, setDebateMessages] = useState([]) // saved from debate for suggestions
+  const [previewLaw, setPreviewLaw] = useState(null) // law preview modal data
 
   // ── Lecture des URL params (ex: depuis l'Explorateur) ─
   useEffect(() => {
@@ -1563,7 +1639,8 @@ function ButterflyApp() {
       {sharePanel && <SharePanel shareId={sharePanel.shareId} proposition={sharePanel.proposition} scoreGlobal={sharePanel.scoreGlobal} onClose={() => setSharePanel(null)} />}
       <DebateChatModal open={showDebateChat} onClose={() => setShowDebateChat(false)} law={lawText} initialResult={result} getAccessToken={getAccessToken} onUpgrade={handleUpgrade} onSignIn={() => { setShowDebateChat(false); setShowAuthModal(true) }} onShare={openSharePanel} shareCreating={shareCreating} onSaveMessages={(msgs) => setDebateMessages(msgs)} />
       <AdaptLawModal open={showAdaptModal} onClose={() => setShowAdaptModal(false)} originalLaw={lawText} chatMessages={debateMessages} getAccessToken={getAccessToken} onReAnalyze={(newLaw) => { analyzeLaw(newLaw, { asRevision: true }) }} />
-      
+      <LawPreviewModal law={previewLaw} onClose={() => setPreviewLaw(null)} onAnalyze={(text) => { setPreviewLaw(null); setShowSidebar(false); setLawText(text); setMode('single') }} />
+
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-3xl"></div>
@@ -1602,8 +1679,8 @@ function ButterflyApp() {
               <button onClick={() => setShowSidebar(false)} className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><X className="w-4 h-4" /></button>
               <Tabs value={sidebarTab} onValueChange={setSidebarTab}>
                 <TabsList className="w-full mb-4"><TabsTrigger value="history" className="flex-1"><History className="w-4 h-4 mr-1" />Historique</TabsTrigger><TabsTrigger value="tops" className="flex-1"><Trophy className="w-4 h-4 mr-1" />Top/Flop</TabsTrigger></TabsList>
-                <TabsContent value="history"><HistoryPanel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
-                <TabsContent value="tops"><LeaderboardV2Panel onSelectLaw={(law) => { setLawText(law); setMode('single'); setShowSidebar(false) }} /></TabsContent>
+                <TabsContent value="history"><HistoryPanel onSelectLaw={(item) => setPreviewLaw(item)} /></TabsContent>
+                <TabsContent value="tops"><LeaderboardV2Panel onSelectLaw={(item) => setPreviewLaw(item)} /></TabsContent>
               </Tabs>
             </div>
           </motion.div>
@@ -1691,7 +1768,7 @@ function ButterflyApp() {
                   </div>
                   <TopFlopPreview
                     onOpenTops={() => { setSidebarTab('tops'); setShowSidebar(true) }}
-                    onSelectLaw={(text) => setLawText(text)}
+                    onSelectLaw={(item) => setPreviewLaw(item)}
                   />
                 </div>
               )}
