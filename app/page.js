@@ -1431,6 +1431,9 @@ function ButterflyApp() {
         <a href="/faq" className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors text-sm text-muted-foreground hover:text-white">
           <HelpCircle className="w-4 h-4" /><span className="hidden sm:inline">FAQ</span>
         </a>
+        <button onClick={() => { reset(); setShowSidebar(false) }} className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+          <span className="text-sm font-bold"><span className="text-blue-400">Butterfly</span><span className="text-white">.gov</span></span>
+        </button>
         <div className="flex items-center gap-2">
           {user ? <UserMenu /> : <Button onClick={() => setShowAuthModal(true)} variant="outline" size="sm"><User className="w-4 h-4 mr-2" />Connexion</Button>}
           <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 rounded-full bg-card border border-white/10 hover:border-blue-500/50 transition-colors">{showSidebar ? <X className="w-5 h-5" /> : <History className="w-5 h-5" />}</button>
@@ -1477,7 +1480,7 @@ function ButterflyApp() {
                   <label className="block text-center text-xl text-white/80">Si vous étiez Président, quelle loi passeriez-vous ?</label>
                   <div className="relative">
                     <Input type="text" value={lawText} onChange={(e) => setLawText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeLaw()} placeholder="Ex: Interdire les SUV en centre-ville..." className="h-16 text-lg pl-6 pr-16 rounded-full bg-card border-2 border-white/10 focus:border-blue-500 transition-all pulse-glow" disabled={loading} />
-                    <Button onClick={analyzeLaw} disabled={loading || !lawText.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"><Sparkles className="w-5 h-5" /></Button>
+                    <Button onClick={() => analyzeLaw()} disabled={loading || !lawText.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"><Sparkles className="w-5 h-5" /></Button>
                   </div>
                 </div>
               ) : mode === 'explain' ? (
