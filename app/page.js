@@ -246,6 +246,21 @@ function UserMenu() {
   const [open, setOpen] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [resuming, setResuming] = useState(false)
+  const [upgrading, setUpgrading] = useState(false)
+
+  const handleUpgradeMenu = async () => {
+    setUpgrading(true)
+    try {
+      const token = await getAccessToken()
+      const res = await fetch('/api/stripe/create-checkout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } })
+      if (res.ok) {
+        const data = await res.json()
+        window.location.href = data.url
+      } else {
+        alert('Impossible d\'ouvrir la page de paiement')
+      }
+    } catch { alert('Erreur réseau') } finally { setUpgrading(false) }
+  }
 
   const handleUnsubscribe = async () => {
     if (!confirm('Êtes-vous sûr de vouloir résilier votre abonnement Premium ? Votre accès restera actif jusqu\'à la fin de la période en cours.')) return
@@ -307,6 +322,11 @@ function UserMenu() {
             </p>
           </div>
           <div className="p-2">
+            {!isPremium && (
+              <button onClick={handleUpgradeMenu} disabled={upgrading} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500/20 to-orange-500/20 hover:from-yellow-500/30 hover:to-orange-500/30 border border-yellow-500/30 text-left text-sm text-yellow-400 font-medium disabled:opacity-50 mb-1">
+                <Crown className="w-4 h-4" />{upgrading ? 'Chargement...' : 'Passer Premium — 7,99€/mois'}
+              </button>
+            )}
             {isPremium && !isCanceled && (
               <button onClick={handleUnsubscribe} disabled={canceling} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-500/10 text-left text-sm text-red-400 disabled:opacity-50">
                 <X className="w-4 h-4" />{canceling ? 'Résiliation...' : 'Se désabonner'}
