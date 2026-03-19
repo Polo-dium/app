@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, createContext, useContext } from 'react'
+import { useState, useRef, useEffect, useCallback, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle, Edit3, ArrowUpRight, ArrowDownRight, Minus, Lightbulb, Check } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle, Edit3, ArrowUpRight, ArrowDownRight, Minus, Lightbulb, Check, Mic, MicOff, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,125 @@ import { createClient } from '@/lib/supabase/client'
 import { getDailyLaws } from '@/lib/daily-laws'
 import { getDailyExplorerLaws } from '@/lib/explorer-laws'
 import SharePanel from '@/components/SharePanel'
+
+// ── Rotating Placeholders ──
+const ANALYSIS_PLACEHOLDERS = [
+  "Et si on interdisait les jets privés ?",
+  "Semaine de 4 jours obligatoire",
+  "Revenu universel à 1000€/mois",
+  "Interdiction du démarchage téléphonique",
+  "Suppression des niches fiscales immobilières",
+  "Droit de vote dès 16 ans",
+  "Nationalisation des autoroutes",
+  "Fin du changement d'heure",
+  "Quota de logements sociaux à 40%",
+  "Rendre le train moins cher que l'avion",
+  "Taxer les superprofits à 25%",
+  "Repas bio obligatoires dans les cantines",
+]
+
+const EXPLAIN_PLACEHOLDERS = [
+  "Loi travail 2016",
+  "Réforme des retraites 2023",
+  "Loi climat et résilience",
+  "Loi immigration 2024",
+  "Loi EGALIM sur l'alimentation",
+  "Réforme du RSA",
+  "Loi Pacte sur les entreprises",
+  "Loi bioéthique 2021",
+]
+
+const EXPLORE_PLACEHOLDERS = [
+  "Interdire les publicités alimentaires pour enfants",
+  "Rendre l'école obligatoire jusqu'à 18 ans",
+  "Interdire l'élevage intensif",
+  "Légaliser l'euthanasie",
+  "Supprimer le Sénat",
+  "Instaurer un service civique de 6 mois",
+  "Nationaliser EDF et Engie",
+  "Taxer les transactions financières",
+]
+
+function useRotatingPlaceholder(placeholders, interval = 4000) {
+  const [index, setIndex] = useState(0)
+  const [visible, setVisible] = useState(true)
+  const [paused, setPaused] = useState(false)
+
+  useEffect(() => {
+    if (paused) return
+    const timer = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => {
+        setIndex(i => (i + 1) % placeholders.length)
+        setVisible(true)
+      }, 300)
+    }, interval)
+    return () => clearInterval(timer)
+  }, [paused, placeholders.length, interval])
+
+  return { placeholder: placeholders[index], visible, pause: () => setPaused(true), resume: () => setPaused(false) }
+}
+
+// ── Speech Recognition Hook ──
+function useSpeechRecognition() {
+  const [isListening, setIsListening] = useState(false)
+  const [supported, setSupported] = useState(false)
+  const recognitionRef = useRef(null)
+  const onResultRef = useRef(null)
+
+  useEffect(() => {
+    const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+    if (SpeechRecognition) {
+      setSupported(true)
+      const recognition = new SpeechRecognition()
+      recognition.lang = 'fr-FR'
+      recognition.continuous = true
+      recognition.interimResults = true
+
+      recognition.onresult = (event) => {
+        let finalTranscript = ''
+        let interimTranscript = ''
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) finalTranscript += transcript
+          else interimTranscript += transcript
+        }
+        if (onResultRef.current) onResultRef.current(finalTranscript, interimTranscript)
+      }
+
+      recognition.onerror = (event) => {
+        if (event.error !== 'aborted') console.warn('[Speech] Error:', event.error)
+        setIsListening(false)
+      }
+
+      recognition.onend = () => setIsListening(false)
+      recognitionRef.current = recognition
+    }
+  }, [])
+
+  const toggle = useCallback((onResult) => {
+    onResultRef.current = onResult
+    if (!recognitionRef.current) return
+    if (isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    } else {
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch { /* already started */ }
+    }
+  }, [isListening])
+
+  const stop = useCallback(() => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    }
+  }, [isListening])
+
+  return { isListening, supported, toggle, stop }
+}
 
 // Auth Context
 const AuthContext = createContext(null)
@@ -1509,6 +1628,13 @@ function ButterflyApp() {
   const [showAdaptModal, setShowAdaptModal] = useState(false)
   const [debateMessages, setDebateMessages] = useState([]) // saved from debate for suggestions
   const [previewLaw, setPreviewLaw] = useState(null) // law preview modal data
+  const [pdfLoading, setPdfLoading] = useState(false) // PDF export loading
+
+  // ── Speech Recognition + Rotating Placeholders ──
+  const speech = useSpeechRecognition()
+  const analysisPlaceholder = useRotatingPlaceholder(ANALYSIS_PLACEHOLDERS)
+  const explainPlaceholder = useRotatingPlaceholder(EXPLAIN_PLACEHOLDERS)
+  const explorePlaceholder = useRotatingPlaceholder(EXPLORE_PLACEHOLDERS)
 
   // ── Lecture des URL params (ex: depuis l'Explorateur) ─
   useEffect(() => {
@@ -1711,16 +1837,32 @@ function ButterflyApp() {
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Si vous étiez Président, quelle loi passeriez-vous ?</label>
                   <div className="relative">
-                    <Input type="text" value={lawText} onChange={(e) => setLawText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeLaw()} placeholder="Ex: Interdire les SUV en centre-ville..." className="h-16 text-lg pl-6 pr-16 rounded-full bg-card border-2 border-white/10 focus:border-blue-500 transition-all pulse-glow" disabled={loading} />
-                    <Button onClick={() => analyzeLaw()} disabled={loading || !lawText.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"><Sparkles className="w-5 h-5" /></Button>
+                    <Input type="text" value={lawText} onChange={(e) => setLawText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeLaw()} onFocus={() => analysisPlaceholder.pause()} onBlur={() => { if (!lawText) analysisPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-blue-500 transition-all pulse-glow" disabled={loading} />
+                    {!lawText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${analysisPlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{analysisPlaceholder.placeholder}</span>}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {speech.supported && (
+                        <button onClick={() => speech.toggle((final) => { if (final) setLawText(prev => prev + final) })} className={`h-10 w-10 rounded-full flex items-center justify-center transition-all ${speech.isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-muted-foreground hover:bg-white/20 hover:text-white'}`} title="Dictée vocale" type="button">
+                          {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                        </button>
+                      )}
+                      <Button onClick={() => analyzeLaw()} disabled={loading || !lawText.trim()} className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"><Sparkles className="w-5 h-5" /></Button>
+                    </div>
                   </div>
                 </div>
               ) : mode === 'explain' ? (
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Quelle loi ou réforme voulez-vous comprendre ?</label>
                   <div className="relative">
-                    <Input type="text" value={explainText} onChange={(e) => setExplainText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeExplain()} placeholder="Ex: Loi travail 2016, Réforme des retraites..." className="h-16 text-lg pl-6 pr-16 rounded-full bg-card border-2 border-white/10 focus:border-green-600 transition-all" disabled={explainLoading} />
-                    <Button onClick={analyzeExplain} disabled={explainLoading || !explainText.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-green-700 hover:bg-green-600"><BookOpen className="w-5 h-5" /></Button>
+                    <Input type="text" value={explainText} onChange={(e) => setExplainText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeExplain()} onFocus={() => explainPlaceholder.pause()} onBlur={() => { if (!explainText) explainPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-green-600 transition-all" disabled={explainLoading} />
+                    {!explainText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${explainPlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{explainPlaceholder.placeholder}</span>}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {speech.supported && (
+                        <button onClick={() => speech.toggle((final) => { if (final) setExplainText(prev => prev + final) })} className={`h-10 w-10 rounded-full flex items-center justify-center transition-all ${speech.isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-muted-foreground hover:bg-white/20 hover:text-white'}`} title="Dictée vocale" type="button">
+                          {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                        </button>
+                      )}
+                      <Button onClick={analyzeExplain} disabled={explainLoading || !explainText.trim()} className="h-12 w-12 rounded-full bg-green-700 hover:bg-green-600"><BookOpen className="w-5 h-5" /></Button>
+                    </div>
                   </div>
                   <p className="text-xs text-center text-muted-foreground">Explication factuelle, sans jugement de valeur · Sources primaires citées</p>
                 </div>
@@ -1728,8 +1870,16 @@ function ButterflyApp() {
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Quelle loi voulez-vous explorer en constellation ?</label>
                   <div className="relative">
-                    <Input type="text" value={exploreText} onChange={(e) => setExploreText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} placeholder="Ex: Interdire les publicités alimentaires pour enfants..." className="h-16 text-lg pl-6 pr-16 rounded-full bg-card border-2 border-white/10 focus:border-violet-600 transition-all" />
-                    <Button onClick={() => { if (exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} disabled={exploreText.trim().length < 5} className="absolute right-2 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-violet-700 hover:bg-violet-600"><Network className="w-5 h-5" /></Button>
+                    <Input type="text" value={exploreText} onChange={(e) => setExploreText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} onFocus={() => explorePlaceholder.pause()} onBlur={() => { if (!exploreText) explorePlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-violet-600 transition-all" disabled={false} />
+                    {!exploreText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${explorePlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{explorePlaceholder.placeholder}</span>}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {speech.supported && (
+                        <button onClick={() => speech.toggle((final) => { if (final) setExploreText(prev => prev + final) })} className={`h-10 w-10 rounded-full flex items-center justify-center transition-all ${speech.isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-muted-foreground hover:bg-white/20 hover:text-white'}`} title="Dictée vocale" type="button">
+                          {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                        </button>
+                      )}
+                      <Button onClick={() => { if (exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} disabled={exploreText.trim().length < 5} className="h-12 w-12 rounded-full bg-violet-700 hover:bg-violet-600"><Network className="w-5 h-5" /></Button>
+                    </div>
                   </div>
                   <p className="text-xs text-center text-muted-foreground">Carte radiale d'implications · 3 anneaux de profondeur · Cliquez les nœuds pour naviguer</p>
                 </div>
@@ -1839,6 +1989,32 @@ function ButterflyApp() {
                     <>
                     <VoteButtons law={explainText} />
                     <div className="flex justify-center gap-3 flex-wrap">
+                      <Button
+                        onClick={async () => {
+                          setPdfLoading(true)
+                          try {
+                            const res = await fetch('/api/export-pdf', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ title: explainText, content: explainResult }),
+                            })
+                            if (!res.ok) throw new Error('Erreur PDF')
+                            const blob = await res.blob()
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `butterfly-explication-${explainText.slice(0, 40).replace(/[^a-zA-Z0-9àâäéèêëïîôùûüÿçœæ ]/gi, '').trim().replace(/\s+/g, '-').toLowerCase()}.pdf`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          } catch (err) { setError('Impossible de générer le PDF : ' + err.message) }
+                          finally { setPdfLoading(false) }
+                        }}
+                        disabled={pdfLoading}
+                        variant="outline"
+                        className="border-green-500/30 hover:bg-green-500/10 text-green-400"
+                      >
+                        {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}Télécharger en PDF
+                      </Button>
                       <Button onClick={() => { setMode('single'); setLawText(explainText); setExplainResult('') }} variant="outline" className="border-green-500/30 hover:bg-green-500/10 text-green-400">
                         <Sparkles className="w-4 h-4 mr-2" />Analyser l'impact →
                       </Button>
