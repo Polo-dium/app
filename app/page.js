@@ -1837,7 +1837,7 @@ function ButterflyApp() {
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Si vous étiez Président, quelle loi passeriez-vous ?</label>
                   <div className="relative">
-                    <Input type="text" value={lawText} onChange={(e) => setLawText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeLaw()} onFocus={() => analysisPlaceholder.pause()} onBlur={() => { if (!lawText) analysisPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-blue-500 transition-all pulse-glow" disabled={loading} />
+                    <Input type="text" value={lawText} onChange={(e) => setLawText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeLaw()} onFocus={() => { if (!lawText) setLawText(analysisPlaceholder.placeholder); analysisPlaceholder.pause() }} onBlur={() => { if (!lawText) analysisPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-blue-500 transition-all pulse-glow" disabled={loading} />
                     {!lawText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${analysisPlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{analysisPlaceholder.placeholder}</span>}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                       {speech.supported && (
@@ -1853,7 +1853,7 @@ function ButterflyApp() {
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Quelle loi ou réforme voulez-vous comprendre ?</label>
                   <div className="relative">
-                    <Input type="text" value={explainText} onChange={(e) => setExplainText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeExplain()} onFocus={() => explainPlaceholder.pause()} onBlur={() => { if (!explainText) explainPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-green-600 transition-all" disabled={explainLoading} />
+                    <Input type="text" value={explainText} onChange={(e) => setExplainText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeExplain()} onFocus={() => { if (!explainText) setExplainText(explainPlaceholder.placeholder); explainPlaceholder.pause() }} onBlur={() => { if (!explainText) explainPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-green-600 transition-all" disabled={explainLoading} />
                     {!explainText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${explainPlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{explainPlaceholder.placeholder}</span>}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                       {speech.supported && (
@@ -1870,7 +1870,7 @@ function ButterflyApp() {
                 <div className="space-y-4">
                   <label className="block text-center text-xl text-white/80">Quelle loi voulez-vous explorer en constellation ?</label>
                   <div className="relative">
-                    <Input type="text" value={exploreText} onChange={(e) => setExploreText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} onFocus={() => explorePlaceholder.pause()} onBlur={() => { if (!exploreText) explorePlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-violet-600 transition-all" disabled={false} />
+                    <Input type="text" value={exploreText} onChange={(e) => setExploreText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} onFocus={() => { if (!exploreText) setExploreText(explorePlaceholder.placeholder); explorePlaceholder.pause() }} onBlur={() => { if (!exploreText) explorePlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-violet-600 transition-all" disabled={false} />
                     {!exploreText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${explorePlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{explorePlaceholder.placeholder}</span>}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                       {speech.supported && (
