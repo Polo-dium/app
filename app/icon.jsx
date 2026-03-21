@@ -16,7 +16,7 @@ export default function Icon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#0f172a',
+          backgroundColor: '#0a0a0a',
         }}
       >
         <svg
@@ -24,7 +24,7 @@ export default function Icon() {
           height="380"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#3b82f6"
+          stroke="#60a5fa"
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
