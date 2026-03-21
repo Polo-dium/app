@@ -79,7 +79,15 @@ export default function FAQPage() {
         </Accordion>
 
         <div className="mt-12 text-center">
-          <p className="text-muted-foreground text-sm mb-4">Vous avez d'autres questions ?</p>
+          <p className="text-muted-foreground text-sm mb-4">
+            Vous avez d&apos;autres questions ?{' '}
+            <a
+              href="mailto:contact@butterflygov.com"
+              className="text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Contactez-nous
+            </a>
+          </p>
           <Link href="/" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-medium">
             Essayer Butterfly.gov &rarr;
           </Link>
