@@ -4,7 +4,8 @@ export const runtime = 'edge'
 export const size = { width: 180, height: 180 }
 export const contentType = 'image/png'
 
-// Generates /apple-icon.png — used for iOS home screen shortcut
+// Generates /apple-icon.png — iOS home screen icon (180x180)
+// Uses the exact ButterflyIcon SVG paths from app/page.js
 export default function AppleIcon() {
   return new ImageResponse(
     (
@@ -15,88 +16,25 @@ export default function AppleIcon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)',
-          borderRadius: 0,
+          backgroundColor: '#0f172a',
         }}
       >
-        {/* Butterfly wings — left */}
-        <div
-          style={{
-            position: 'absolute',
-            width: 56,
-            height: 70,
-            background: 'radial-gradient(ellipse at 70% 40%, #60a5fa 0%, #2563eb 60%, #1d4ed8 100%)',
-            borderRadius: '80% 20% 60% 40%',
-            left: 28,
-            top: 46,
-            opacity: 0.9,
-            transform: 'rotate(-10deg)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            width: 42,
-            height: 52,
-            background: 'radial-gradient(ellipse at 60% 60%, #93c5fd 0%, #3b82f6 60%, #2563eb 100%)',
-            borderRadius: '40% 60% 20% 80%',
-            left: 34,
-            top: 110,
-            opacity: 0.8,
-            transform: 'rotate(15deg)',
-          }}
-        />
-        {/* Butterfly wings — right */}
-        <div
-          style={{
-            position: 'absolute',
-            width: 56,
-            height: 70,
-            background: 'radial-gradient(ellipse at 30% 40%, #60a5fa 0%, #2563eb 60%, #1d4ed8 100%)',
-            borderRadius: '20% 80% 40% 60%',
-            right: 28,
-            top: 46,
-            opacity: 0.9,
-            transform: 'rotate(10deg)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            width: 42,
-            height: 52,
-            background: 'radial-gradient(ellipse at 40% 60%, #93c5fd 0%, #3b82f6 60%, #2563eb 100%)',
-            borderRadius: '60% 40% 80% 20%',
-            right: 34,
-            top: 110,
-            opacity: 0.8,
-            transform: 'rotate(-15deg)',
-          }}
-        />
-        {/* Body */}
-        <div
-          style={{
-            position: 'absolute',
-            width: 8,
-            height: 78,
-            background: 'linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%)',
-            borderRadius: 4,
-            top: 54,
-            left: 86,
-          }}
-        />
-        {/* Head */}
-        <div
-          style={{
-            position: 'absolute',
-            width: 12,
-            height: 12,
-            background: '#e2e8f0',
-            borderRadius: '50%',
-            top: 43,
-            left: 84,
-          }}
-        />
+        <svg
+          width="136"
+          height="136"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 12V3" />
+          <path d="M5.5 7c-.8-1.3-2.1-2-3.5-2 2.4 0 4.5 2 4.5 4.5 0 3-2.5 5.5-5.5 5.5 2.2 0 4.3-1.3 5.5-3.5" />
+          <path d="M18.5 7c.8-1.3 2.1-2 3.5-2-2.4 0-4.5 2-4.5 4.5 0 3 2.5 5.5 5.5 5.5-2.2 0-4.3-1.3-5.5-3.5" />
+          <path d="M12 12c-2 1.5-3 4-3 6" />
+          <path d="M12 12c2 1.5 3 4 3 6" />
+        </svg>
       </div>
     ),
     { ...size }
