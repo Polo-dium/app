@@ -177,7 +177,7 @@ function useAuth() {
 // Icons
 function ButterflyIcon({ className }) {
   return (
-    <img src="/logo.png" className={className} alt="Butterfly" />
+    <img src="/logo.png" className={className} alt="Butterfly" style={{ objectFit: 'contain' }} />
   )
 }
 
