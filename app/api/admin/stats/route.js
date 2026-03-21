@@ -41,8 +41,12 @@ export async function GET(request) {
   // Admin check: must be premium + whitelisted email
   const email = user.email?.toLowerCase()
   if (!user.profile?.is_premium || !ADMIN_EMAILS.includes(email)) {
+    console.warn(JSON.stringify({ level: 'warn', event: 'admin_access_denied', email, userId: user.id, ts: new Date().toISOString() }))
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403, headers: corsHeaders })
   }
+
+  // Audit log — every successful admin access is recorded in Vercel logs
+  console.log(JSON.stringify({ level: 'info', event: 'admin_stats_accessed', email, userId: user.id, ts: new Date().toISOString() }))
 
   const supabase = createServiceClient()
   if (!supabase) {

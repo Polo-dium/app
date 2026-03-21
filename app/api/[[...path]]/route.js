@@ -21,6 +21,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
 
+// Structured server-side error logger — returns a generic JSON response to avoid
+// leaking internal details (stack traces, library names, DB schema) to clients.
+function serverError(context, err, status = 500) {
+  console.error(JSON.stringify({
+    level: 'error',
+    context,
+    message: err?.message,
+    stack: err?.stack,
+    ts: new Date().toISOString(),
+  }))
+  return NextResponse.json({ error: 'Erreur interne. Veuillez réessayer.' }, { status, headers: corsHeaders })
+}
+
 // In-memory rate limiting (fallback when Supabase not configured)
 const rateLimitStore = new Map()
 
@@ -292,6 +305,72 @@ async function checkDebateChatRateLimit(userId, userTier) {
   return { allowed: true, remaining: limits.max - record.count, resetAt: new Date(record.windowStart + windowMs) }
 }
 
+// Rate limit configuration (votes — sliding 1h window)
+const VOTE_LIMITS = {
+  free:    { max: 30,   windowMs: 60 * 60 * 1000 },
+  premium: { max: 1000, windowMs: 60 * 60 * 1000 },
+}
+
+async function checkVoteRateLimit(userId, userTier) {
+  if (userTier === 'premium') {
+    return { allowed: true }
+  }
+  const limits = VOTE_LIMITS.free
+  const key = `vote:${userId}`
+  const windowMs = limits.windowMs
+  const supabase = createServiceClient()
+
+  if (supabase) {
+    try {
+      const { data: existing, error: fetchErr } = await supabase
+        .from('rate_limits').select('*')
+        .eq('identifier', key).eq('identifier_type', 'user').single()
+
+      if (fetchErr && fetchErr.code !== 'PGRST116') {
+        return { allowed: true }
+      }
+
+      const now = new Date()
+      const windowStart = new Date(Date.now() - windowMs)
+
+      if (!existing) {
+        await supabase.from('rate_limits').insert({ identifier: key, identifier_type: 'user', request_count: 1, window_start: now })
+        return { allowed: true }
+      }
+
+      if (new Date(existing.window_start) < windowStart) {
+        await supabase.from('rate_limits').update({ request_count: 1, window_start: now })
+          .eq('identifier', key).eq('identifier_type', 'user')
+        return { allowed: true }
+      }
+
+      if (existing.request_count >= limits.max) {
+        return { allowed: false, message: `Limite de ${limits.max} votes/heure atteinte.` }
+      }
+
+      await supabase.from('rate_limits').update({ request_count: existing.request_count + 1 })
+        .eq('identifier', key).eq('identifier_type', 'user')
+      return { allowed: true }
+    } catch {
+      return { allowed: true }
+    }
+  }
+
+  // In-memory fallback
+  const now = Date.now()
+  let record = rateLimitStore.get(key)
+  if (!record || record.windowStart < now - windowMs) {
+    rateLimitStore.set(key, { count: 1, windowStart: now })
+    return { allowed: true }
+  }
+  if (record.count >= limits.max) {
+    return { allowed: false, message: `Limite de ${limits.max} votes/heure atteinte.` }
+  }
+  record.count++
+  rateLimitStore.set(key, record)
+  return { allowed: true }
+}
+
 // Get user from auth header
 async function getUser(request) {
   const supabase = createServiceClient()
@@ -556,9 +635,8 @@ async function handleAnalyze(request) {
     }, { headers: corsHeaders })
 
   } catch (error) {
-    console.error('Analysis Error:', error)
     trackAnalysis({ mode: 'analyse', userId: user?.id, ip: ipAddress, tier: userTier, proposition: law, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - startTime, status: 'error', errorMessage: error.message }).catch(() => {})
-    return NextResponse.json({ error: 'Erreur lors de l\'analyse: ' + error.message }, { status: 500, headers: corsHeaders })
+    return serverError('handleAnalyze', error)
   }
 }
 
@@ -599,6 +677,23 @@ async function handleDebateChat(request) {
 
   if (!firstMessage && (!messages || !Array.isArray(messages))) {
     return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400, headers: corsHeaders })
+  }
+
+  if (Array.isArray(messages)) {
+    const MAX_MESSAGES = 50
+    const MAX_MSG_LENGTH = 2000
+    const VALID_ROLES = new Set(['user', 'assistant'])
+    if (messages.length > MAX_MESSAGES) {
+      return NextResponse.json({ error: `L'historique ne peut pas dépasser ${MAX_MESSAGES} messages` }, { status: 400, headers: corsHeaders })
+    }
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object' || !VALID_ROLES.has(msg.role) || typeof msg.content !== 'string') {
+        return NextResponse.json({ error: 'Structure de message invalide' }, { status: 400, headers: corsHeaders })
+      }
+      if (msg.content.length > MAX_MSG_LENGTH) {
+        return NextResponse.json({ error: `Chaque message ne peut pas dépasser ${MAX_MSG_LENGTH} caractères` }, { status: 400, headers: corsHeaders })
+      }
+    }
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -739,9 +834,8 @@ Tu dois ajuster ces scores en fonction de la qualité des arguments de l'utilisa
     return NextResponse.json({ response: responseText, scoreAdjustment }, { headers: corsHeaders })
 
   } catch (error) {
-    console.error('Debate Chat Error:', error)
     trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, modelUsed: MODEL_FREE, responseTimeMs: Date.now() - chatStartTime, status: 'error', errorMessage: error.message }).catch(() => {})
-    return NextResponse.json({ error: 'Erreur lors du débat: ' + error.message }, { status: 500, headers: corsHeaders })
+    return serverError('handleDebateChat', error)
   }
 }
 
@@ -753,7 +847,7 @@ async function handleCreateShare(request) {
     return NextResponse.json({ shareUrl, ogImageUrl, shareId }, { headers: corsHeaders })
   } catch (error) {
     console.error('Share creation error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders })
+    return serverError('handleCreateShare', error)
   }
 }
 
@@ -1086,8 +1180,7 @@ async function handleCreateCheckout(request) {
 
     return NextResponse.json({ url: session.url }, { headers: corsHeaders })
   } catch (err) {
-    console.error('Stripe checkout error:', err)
-    return NextResponse.json({ error: err.message || 'Erreur Stripe' }, { status: 500, headers: corsHeaders })
+    return serverError('handleCheckout', err)
   }
 }
 
@@ -1150,8 +1243,7 @@ async function handleStripePortal(request) {
     })
     return NextResponse.json({ url: session.url }, { headers: corsHeaders })
   } catch (err) {
-    console.error('[Portal] Error:', err.message)
-    return NextResponse.json({ error: err.message || 'Erreur Stripe' }, { status: 500, headers: corsHeaders })
+    return serverError('handlePortal', err)
   }
 }
 
@@ -1338,8 +1430,7 @@ Réponds en JSON :
     trackAnalysis({ mode: 'suggestions', userId: user.id, ip: getClientIP(request), tier: userTier, proposition: law, modelUsed: model, status: 'success' }).catch(() => {})
     return NextResponse.json(data, { headers: corsHeaders })
   } catch (err) {
-    console.error('[Suggestions] Error:', err.message)
-    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders })
+    return serverError('handleSuggestions', err)
   }
 }
 
@@ -1359,6 +1450,17 @@ async function handleVoteV2(request) {
 
   if (!law_id || !['pour', 'contre'].includes(vote)) {
     return NextResponse.json({ error: 'Paramètres invalides (law_id + vote pour|contre)' }, { status: 400, headers: corsHeaders })
+  }
+
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (!UUID_RE.test(law_id)) {
+    return NextResponse.json({ error: 'law_id invalide' }, { status: 400, headers: corsHeaders })
+  }
+
+  const voteTier = user.profile?.is_premium ? 'premium' : 'free'
+  const voteRateLimit = await checkVoteRateLimit(user.id, voteTier)
+  if (!voteRateLimit.allowed) {
+    return NextResponse.json({ error: voteRateLimit.message }, { status: 429, headers: corsHeaders })
   }
 
   const supabase = createServiceClient()
@@ -1391,8 +1493,7 @@ async function handleVoteV2(request) {
     trackAnalysis({ mode: 'vote', userId: user.id, ip: getClientIP(request), tier: user.profile?.is_premium ? 'premium' : 'free', proposition: law_id, status: 'success' }).catch(() => {})
     return NextResponse.json(counts, { headers: corsHeaders })
   } catch (err) {
-    console.error('[Vote V2] Error:', err.message)
-    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders })
+    return serverError('handleVoteV2', err)
   }
 }
 
@@ -1414,6 +1515,11 @@ async function handleDeleteVoteV2(request) {
   const body = await request.json()
   const { law_id } = body
   if (!law_id) return NextResponse.json({ error: 'law_id requis' }, { status: 400, headers: corsHeaders })
+
+  const UUID_RE_DEL = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (!UUID_RE_DEL.test(law_id)) {
+    return NextResponse.json({ error: 'law_id invalide' }, { status: 400, headers: corsHeaders })
+  }
 
   const supabase = createServiceClient()
   if (!supabase) return NextResponse.json({ error: 'Service non disponible' }, { status: 500, headers: corsHeaders })
