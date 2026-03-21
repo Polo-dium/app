@@ -10,6 +10,15 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Title and content required' }, { status: 400 })
     }
 
+    const MAX_TITLE_LENGTH = 500
+    const MAX_CONTENT_LENGTH = 50000
+    if (typeof title !== 'string' || title.length > MAX_TITLE_LENGTH) {
+      return NextResponse.json({ error: `Le titre ne doit pas dépasser ${MAX_TITLE_LENGTH} caractères` }, { status: 400 })
+    }
+    if (typeof content !== 'string' || content.length > MAX_CONTENT_LENGTH) {
+      return NextResponse.json({ error: `Le contenu ne doit pas dépasser ${MAX_CONTENT_LENGTH} caractères` }, { status: 400 })
+    }
+
     // Dynamic import to avoid edge issues
     const PDFDocument = (await import('pdfkit')).default
 

@@ -13,9 +13,10 @@ import { trackAnalysis } from '@/lib/analytics'
 const MODEL_FREE    = process.env.CLAUDE_MODEL_FREE    || 'claude-haiku-4-5-20251001'
 const MODEL_PREMIUM = process.env.CLAUDE_MODEL_PREMIUM || 'claude-haiku-4-5-20251001'
 
-// CORS headers
+// CORS headers — restricted to the production domain (or CORS_ORIGINS env var)
+const ALLOWED_ORIGIN = process.env.CORS_ORIGINS?.split(',')[0]?.trim() || 'https://butterflygov.com'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
@@ -119,16 +120,17 @@ IMPORTANT — Termine TOUJOURS ta réponse par ce JSON sur une nouvelle ligne, r
 Format de réponse : 2-3 paragraphes maximum. Termine par une question rhétorique ou un défi direct, PUIS le JSON.`
 
 // Get client IP address
+// On Vercel, x-real-ip and x-vercel-forwarded-for are injected by the infrastructure
+// and cannot be spoofed by clients. x-forwarded-for is user-controlled and used only
+// as a last resort to avoid IP-based rate limit bypass.
 function getClientIP(request) {
   const headersList = headers()
-  const forwardedFor = headersList.get('x-forwarded-for')
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0].trim()
-  }
   const realIP = headersList.get('x-real-ip')
-  if (realIP) {
-    return realIP
-  }
+  if (realIP) return realIP
+  const vercelForwarded = headersList.get('x-vercel-forwarded-for')
+  if (vercelForwarded) return vercelForwarded.split(',')[0].trim()
+  const forwardedFor = headersList.get('x-forwarded-for')
+  if (forwardedFor) return forwardedFor.split(',')[0].trim()
   return 'unknown'
 }
 
@@ -504,6 +506,11 @@ async function handleAnalyze(request) {
     return NextResponse.json({ error: 'Le champ "law" est requis' }, { status: 400, headers: corsHeaders })
   }
 
+  const MAX_LAW_LENGTH = 5000
+  if (law.trim().length > MAX_LAW_LENGTH) {
+    return NextResponse.json({ error: `La proposition ne doit pas dépasser ${MAX_LAW_LENGTH} caractères` }, { status: 400, headers: corsHeaders })
+  }
+
   const user = await getUser(request)
   const ipAddress = getClientIP(request)
 
@@ -574,8 +581,9 @@ async function handleDebateChat(request) {
   const chatIp = getClientIP(request)
   const chatLaw = law || law1 || ''
 
-  // Rate limit only actual chat messages (not firstMessage greeting or summarize)
-  if (!firstMessage && !summarize) {
+  // Rate limit ALL debate chat requests — firstMessage and summarize also trigger
+  // Claude API calls and must be covered to prevent cost exhaustion attacks.
+  {
     const rateLimit = await checkDebateChatRateLimit(user.id, chatTier)
     if (!rateLimit.allowed) {
       trackAnalysis({ mode: 'chat', userId: user.id, ip: chatIp, tier: chatTier, proposition: chatLaw, status: 'rate_limited' }).catch(() => {})

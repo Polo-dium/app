@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
-// Whitelist admin — ou via variable d'env ADMIN_EMAILS (comma-separated)
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'paul.music.boutarin@gmail.com')
+// Whitelist admin — variable d'env ADMIN_EMAILS obligatoire (comma-separated)
+// Aucun fallback intentionnel : si la variable n'est pas définie, l'accès admin est bloqué.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',')
   .map(e => e.trim().toLowerCase())
+  .filter(Boolean)
 
+const ALLOWED_ORIGIN = process.env.CORS_ORIGINS?.split(',')[0]?.trim() || 'https://butterflygov.com'
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
