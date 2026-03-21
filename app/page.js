@@ -177,13 +177,7 @@ function useAuth() {
 // Icons
 function ButterflyIcon({ className }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 12V3" />
-      <path d="M5.5 7c-.8-1.3-2.1-2-3.5-2 2.4 0 4.5 2 4.5 4.5 0 3-2.5 5.5-5.5 5.5 2.2 0 4.3-1.3 5.5-3.5" />
-      <path d="M18.5 7c.8-1.3 2.1-2 3.5-2-2.4 0-4.5 2-4.5 4.5 0 3 2.5 5.5 5.5 5.5-2.2 0-4.3-1.3-5.5-3.5" />
-      <path d="M12 12c-2 1.5-3 4-3 6" />
-      <path d="M12 12c2 1.5 3 4 3 6" />
-    </svg>
+    <img src="/logo.png" className={className} alt="Butterfly" />
   )
 }
 
