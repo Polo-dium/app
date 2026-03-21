@@ -1757,7 +1757,7 @@ function ButterflyApp() {
             <motion.div key="input" className="w-full max-w-2xl space-y-8" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <div className="text-center space-y-4">
                 <motion.div className="inline-flex items-center justify-center w-28 h-28 rounded-full bg-gradient-to-br from-blue-600 via-white/20 to-red-500 p-[2px]" animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 4, repeat: Infinity }}>
-                  <div className="w-full h-full rounded-full bg-background flex items-center justify-center"><ButterflyIcon className="w-40 h-40 text-white" /></div>
+                  <div className="w-full h-full rounded-full bg-background flex items-center justify-center"><ButterflyIcon className="w-44 h-44 text-white" /></div>
                 </motion.div>
                 <h1 className="text-4xl md:text-5xl font-bold"><span className="text-blue-400">Butterfly</span><span className="text-white">.gov</span></h1>
                 <p className="text-muted-foreground text-lg">Le simulateur de conséquences politiques</p>
