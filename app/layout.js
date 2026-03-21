@@ -9,6 +9,13 @@ export const metadata = {
     description: 'Si vous étiez Président, quelle loi passeriez-vous ?',
     type: 'website',
   },
+  manifest: '/manifest.webmanifest',
+  themeColor: '#3b82f6',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Butterfly.gov',
+  },
 }
 
 export default function RootLayout({ children }) {
