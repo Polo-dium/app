@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, createContext, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle, Edit3, ArrowUpRight, ArrowDownRight, Minus, Lightbulb, Check, Mic, MicOff, Download } from 'lucide-react'
+import { Loader2, Share2, RotateCcw, Sparkles, TrendingUp, Heart, Leaf, AlertTriangle, Trophy, Skull, History, Award, ChevronRight, X, Star, User, LogOut, Crown, Lock, Mail, Clock, MessageSquare, Send, Wrench, BookOpen, Network, RefreshCw, ThumbsUp, ThumbsDown, HelpCircle, Edit3, ArrowUpRight, ArrowDownRight, Minus, Lightbulb, Check, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -73,65 +73,9 @@ function useRotatingPlaceholder(placeholders, interval = 4000) {
   return { placeholder: placeholders[index], visible, pause: () => setPaused(true), resume: () => setPaused(false) }
 }
 
-// ── Speech Recognition Hook ──
+// ── (Speech Recognition removed) ──
 function useSpeechRecognition() {
-  const [isListening, setIsListening] = useState(false)
-  const [supported, setSupported] = useState(false)
-  const recognitionRef = useRef(null)
-  const onResultRef = useRef(null)
-
-  useEffect(() => {
-    const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
-    if (SpeechRecognition) {
-      setSupported(true)
-      const recognition = new SpeechRecognition()
-      recognition.lang = 'fr-FR'
-      recognition.continuous = true
-      recognition.interimResults = true
-
-      recognition.onresult = (event) => {
-        let finalTranscript = ''
-        let interimTranscript = ''
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript
-          if (event.results[i].isFinal) finalTranscript += transcript
-          else interimTranscript += transcript
-        }
-        if (onResultRef.current) onResultRef.current(finalTranscript, interimTranscript)
-      }
-
-      recognition.onerror = (event) => {
-        if (event.error !== 'aborted') console.warn('[Speech] Error:', event.error)
-        setIsListening(false)
-      }
-
-      recognition.onend = () => setIsListening(false)
-      recognitionRef.current = recognition
-    }
-  }, [])
-
-  const toggle = useCallback((onResult) => {
-    onResultRef.current = onResult
-    if (!recognitionRef.current) return
-    if (isListening) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-    } else {
-      try {
-        recognitionRef.current.start()
-        setIsListening(true)
-      } catch { /* already started */ }
-    }
-  }, [isListening])
-
-  const stop = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-    }
-  }, [isListening])
-
-  return { isListening, supported, toggle, stop }
+  return { isListening: false, supported: false, toggle: () => {}, stop: () => {} }
 }
 
 // Auth Context
@@ -1840,11 +1784,6 @@ function ButterflyApp() {
                     <Input type="text" value={lawText} onChange={(e) => setLawText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeLaw()} onFocus={() => { if (!lawText) setLawText(analysisPlaceholder.placeholder); analysisPlaceholder.pause() }} onBlur={() => { if (!lawText) analysisPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-blue-500 transition-all pulse-glow" disabled={loading} />
                     {!lawText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${analysisPlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{analysisPlaceholder.placeholder}</span>}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      {speech.supported && (
-                        <button onClick={() => speech.toggle((final) => { if (final) setLawText(prev => prev + final) })} className={`h-10 w-10 rounded-full flex items-center justify-center transition-all ${speech.isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-muted-foreground hover:bg-white/20 hover:text-white'}`} title="Dictée vocale" type="button">
-                          {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                        </button>
-                      )}
                       <Button onClick={() => analyzeLaw()} disabled={loading || !lawText.trim()} className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-600 to-red-500 hover:from-blue-500 hover:to-red-400"><Sparkles className="w-5 h-5" /></Button>
                     </div>
                   </div>
@@ -1856,11 +1795,6 @@ function ButterflyApp() {
                     <Input type="text" value={explainText} onChange={(e) => setExplainText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && analyzeExplain()} onFocus={() => { if (!explainText) setExplainText(explainPlaceholder.placeholder); explainPlaceholder.pause() }} onBlur={() => { if (!explainText) explainPlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-green-600 transition-all" disabled={explainLoading} />
                     {!explainText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${explainPlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{explainPlaceholder.placeholder}</span>}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      {speech.supported && (
-                        <button onClick={() => speech.toggle((final) => { if (final) setExplainText(prev => prev + final) })} className={`h-10 w-10 rounded-full flex items-center justify-center transition-all ${speech.isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-muted-foreground hover:bg-white/20 hover:text-white'}`} title="Dictée vocale" type="button">
-                          {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                        </button>
-                      )}
                       <Button onClick={analyzeExplain} disabled={explainLoading || !explainText.trim()} className="h-12 w-12 rounded-full bg-green-700 hover:bg-green-600"><BookOpen className="w-5 h-5" /></Button>
                     </div>
                   </div>
@@ -1873,11 +1807,6 @@ function ButterflyApp() {
                     <Input type="text" value={exploreText} onChange={(e) => setExploreText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} onFocus={() => { if (!exploreText) setExploreText(explorePlaceholder.placeholder); explorePlaceholder.pause() }} onBlur={() => { if (!exploreText) explorePlaceholder.resume() }} placeholder="" className="h-16 text-lg pl-6 pr-28 rounded-full bg-card border-2 border-white/10 focus:border-violet-600 transition-all" disabled={false} />
                     {!exploreText && <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-lg text-muted-foreground pointer-events-none transition-opacity duration-300 ${explorePlaceholder.visible ? 'opacity-100' : 'opacity-0'}`}>{explorePlaceholder.placeholder}</span>}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      {speech.supported && (
-                        <button onClick={() => speech.toggle((final) => { if (final) setExploreText(prev => prev + final) })} className={`h-10 w-10 rounded-full flex items-center justify-center transition-all ${speech.isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-white/10 text-muted-foreground hover:bg-white/20 hover:text-white'}`} title="Dictée vocale" type="button">
-                          {speech.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                        </button>
-                      )}
                       <Button onClick={() => { if (exploreText.trim().length >= 5) window.location.href = `/explorer?loi=${encodeURIComponent(exploreText.trim())}` }} disabled={exploreText.trim().length < 5} className="h-12 w-12 rounded-full bg-violet-700 hover:bg-violet-600"><Network className="w-5 h-5" /></Button>
                     </div>
                   </div>
